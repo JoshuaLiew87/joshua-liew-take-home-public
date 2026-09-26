@@ -122,10 +122,18 @@ class NoiseConfig:
 
 @dataclass(frozen=True)
 class EstimatorConfig:
-    """Shared estimator defaults; implementations arrive in Phase 2."""
+    """Shared estimator defaults and configurable fit safeguards."""
 
     centroid_roi_size_px: int = 13
     gaussian_roi_size_px: int = 15
+    background_border_width_px: int = 2
+    background_fit_plane: bool = True
+    centroid_clip_negative: bool = True
+    minimum_signal_dn: float = 1e-9
+    gaussian_sigma_min_px: float = 0.5
+    gaussian_sigma_max_px: float = 5.0
+    gaussian_irls_iterations: int = 2
+    gaussian_variance_floor_dn2: float = 1.0
     optimizer_max_nfev: int = 100
 
     def validate(self) -> None:
@@ -135,6 +143,16 @@ class EstimatorConfig:
         ):
             if size <= 0 or size % 2 == 0:
                 raise ValueError(f"{name} must be a positive odd integer")
+        if self.background_border_width_px <= 0:
+            raise ValueError("background_border_width_px must be positive")
+        if self.minimum_signal_dn < 0:
+            raise ValueError("minimum_signal_dn cannot be negative")
+        if not 0 < self.gaussian_sigma_min_px < self.gaussian_sigma_max_px:
+            raise ValueError("Gaussian sigma bounds are invalid")
+        if self.gaussian_irls_iterations <= 0:
+            raise ValueError("gaussian_irls_iterations must be positive")
+        if self.gaussian_variance_floor_dn2 <= 0:
+            raise ValueError("gaussian_variance_floor_dn2 must be positive")
         if self.optimizer_max_nfev <= 0:
             raise ValueError("optimizer_max_nfev must be positive")
 
@@ -160,23 +178,43 @@ class ExperimentConfig:
 
 @dataclass(frozen=True)
 class TrajectoryConfig:
-    """Dynamic experiment defaults; implemented in the dynamic phase."""
+    """Dynamic motion defaults shared by experiments and the live demo."""
 
     development_frame_count: int = 2000
     final_frame_count: int = 5000
     frame_rate_hz: float = 1000.0
+    center_x_px: float = 15.5
+    center_y_px: float = 15.5
+    drift_amplitude_px: float = 1.5
+    drift_frequency_hz: float = 0.4
+    jitter_rms_px: float = 0.04
+    jitter_correlation: float = 0.95
     # 73 Hz is aligned to both 0.5 Hz bins (2,000 frames) and 0.2 Hz bins
     # (5,000 frames) at a 1 kHz sample rate.
     disturbance_frequency_hz: float = 73.0
     disturbance_amplitude_px: float = 0.05
+    disturbance_axis: Literal["x", "y"] = "x"
 
     def validate(self) -> None:
         if self.development_frame_count <= 0 or self.final_frame_count <= 0:
             raise ValueError("trajectory frame counts must be positive")
+        if self.frame_rate_hz <= 0:
+            raise ValueError("trajectory frame rate must be positive")
+        if not all(
+            value == value and abs(value) != float("inf")
+            for value in (self.center_x_px, self.center_y_px)
+        ):
+            raise ValueError("trajectory center must be finite")
+        if self.drift_amplitude_px < 0 or self.drift_frequency_hz < 0:
+            raise ValueError("drift parameters cannot be negative")
+        if self.jitter_rms_px < 0 or not 0 <= self.jitter_correlation < 1:
+            raise ValueError("jitter parameters are invalid")
         if not 0 < self.disturbance_frequency_hz < self.frame_rate_hz / 2:
             raise ValueError("disturbance must be below Nyquist")
         if self.disturbance_amplitude_px < 0:
             raise ValueError("disturbance amplitude cannot be negative")
+        if self.disturbance_axis not in ("x", "y"):
+            raise ValueError("disturbance_axis must be 'x' or 'y'")
 
 
 @dataclass(frozen=True)

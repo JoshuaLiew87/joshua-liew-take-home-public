@@ -1,150 +1,451 @@
-# Sub-pixel spot localization under noise
+# Sub-pixel spot localization under sensor noise
 
-> Working draft. This report will be completed as the simulator and experiments are implemented. No result should be stated as measured until it is reproduced by `run_all.py`.
+## Abstract
 
-## 1. Executive summary
+This report describes a configurable simulation and estimation framework for
+sub-pixel localization of a laser spot on a camera sensor. The work is a
+simplified model of a camera-guided laser pointing system in which the spot
+position must be estimated repeatedly at approximately 1 kHz. The simulator
+uses a pixel-integrated circular Gaussian point-spread function and models
+photon shot noise, read noise, dark current, hot pixels, background gradients,
+pixel-response non-uniformity, quantization, and saturation.
 
-TODO: Summarize the simulator, estimator comparison, dynamic result, real-time recommendation, and main limitations.
+Two estimators have been implemented: a windowed, background-subtracted
+intensity centroid and a bounded pixel-integrated two-dimensional Gaussian
+fit. The current implementation also includes a reproducible trajectory
+generator, a static Monte Carlo characterization runner, and an optional live
+visualization. At this checkpoint, the simulator, estimators, static
+characterization, and runtime benchmark have been verified by 31 automated
+tests. The dynamic recovery analysis and final `run_all.py` reproduction
+workflow remain to be completed. Consequently, the runtime result is treated
+as a Python development baseline rather than a flight-hardware guarantee.
 
-## 2. Problem framing and conventions
+## 1. Introduction
 
-TODO: Describe the optical pointing problem, coordinate convention, pixel units, exposure, frame rate, and scope of the simplified model.
+The application considered in this exercise is a pair of camera-guided,
+gimbal-mounted laser platforms. A camera observes the laser spot produced by
+the opposing platform, and the measured spot position is supplied to a
+stabilization loop. Platform vibration, optical variation, illumination, and
+sensor noise make the measurement problem non-trivial. The objective of this
+exercise is to evaluate the accuracy and computational cost of sub-pixel spot
+localization under controlled simulated conditions.
 
-The complete methodology is shown in [methodology_flowchart.md](methodology_flowchart.md).
+The assignment requires four core elements: a configurable sensor simulator,
+at least two localization estimators, Monte Carlo characterization as a
+function of SNR, and per-frame runtime analysis. It additionally requires a
+moving-spot experiment containing slow drift, random jitter, and one periodic
+disturbance. The present report follows that structure. The complete
+methodology is summarized in [methodology_flowchart.md](methodology_flowchart.md).
 
-## 3. Simulator and sensor model
+## 2. Coordinate system and sensor model
 
-The Phase 1 simulator uses a pixel-integrated circular Gaussian PSF. Pixel
-centers have integer coordinates, pixels are stored as `image[y, x]`, and a
-spot position is represented as `(x, y)`. The assignment's approximately
-7-pixel 1/e² diameter is converted to sigma using `sigma = diameter / 4`,
-giving a nominal sigma of 1.75 pixels.
+### 2.1 Coordinate and unit conventions
 
-Spot brightness is represented internally by total expected spot electrons,
-`N_total`. The experiment-facing `target_snr` control is converted to `N_total`
-using a pixel-centered reference spot. Each frame records the reference SNR
-and an effective SNR based on the actual position and sigma.
+Images are stored as `image[y, x]`. Cartesian spot positions are represented
+as `(x, y)`. Pixel centers have integer coordinates, and pixel boundaries are
+located half a pixel from the corresponding center. Charge quantities are
+represented in electrons until conversion to analogue-to-digital units (DN).
+The nominal sensor contains 32 × 32 pixels, has a 1 ms exposure, and operates
+at a nominal frame rate of 1 kHz.
 
-The implemented sensor chain is:
+The spot width is specified using the assignment's approximately 7-pixel
+diameter at the 1/e² intensity level. For
 
-1. render spot, background, and dark-current expectations in electrons;
-2. apply a persistent PRNU gain map;
-3. Poisson-sample the total expected charge;
-4. add Gaussian read noise in electrons;
-5. convert to DN;
-6. apply full-well/ADC clipping and round-to-nearest quantization.
+\[
+I(r)=I_0\exp\left(-\frac{2r^2}{w^2}\right),
+\]
 
-Hot pixels are represented as persistent pixels with elevated dark-current
-rates. The simulator exposes the noiseless expected components, sampled charge,
-ADC image, saturation mask, and frame metadata so later experiments can
-separate physical effects from estimator behavior.
+the corresponding Gaussian standard deviation is \(\sigma=w/2\). Thus, a
+7-pixel diameter gives a nominal \(\sigma=1.75\) pixels.
 
-All major effects are independently switchable through `NoiseConfig`, allowing
-controlled ablation tests without changing the simulator or experiment code.
+### 2.2 Pixel-integrated point-spread function
 
-Cover explicitly:
+The expected spot image is generated by integrating a normalized circular
+Gaussian over the finite area of each pixel. The separability of the Gaussian
+allows the two-dimensional integral to be evaluated as the outer product of
+two one-dimensional normal-CDF differences. This preserves sub-pixel phase
+effects and avoids the bias that would result from evaluating the Gaussian at
+pixel centers only.
 
-- photon/Poisson noise;
-- Gaussian read noise;
-- dark current;
-- hot pixels;
-- non-uniform background gradient;
-- pixel-gain non-uniformity;
-- ADC bit depth, quantization, and saturation;
-- target SNR control and the mapping from target SNR to total spot flux.
+The physical brightness parameter is the total expected spot charge,
+\(N_{total}\), in electrons. The simulator also accepts a target SNR, which
+is converted to \(N_{total}\) using a reference spot centered on a pixel.
+Because the actual peak pixel depends on sub-pixel position and spot width,
+each rendered frame records both the reference SNR and an effective SNR.
 
-Phase 1 currently validates the PSF, fixed-pattern maps, SNR-to-flux
-calibration, noise statistics, reproducibility, quantization, saturation,
-individual noise switches, background-gradient orientation, exposure scaling,
-edge behavior, ADC invariants, and frame-metadata consistency. The current
-foundation and simulator test suite contains 20 passing tests.
+### 2.3 Sensor and noise model
 
-## 4. Estimators
+The nominal stressed-sensor configuration uses a 12-bit ADC, 1 electron/DN
+conversion gain, a 4095-electron full-well limit, and 3 electrons RMS read
+noise. The background is a planar field with a 20-electron offset, an x
+gradient of 0.25 electrons per pixel, and a y gradient of -0.15 electrons
+per pixel. The default fixed-pattern model uses 1% PRNU, a 50-electron/s
+baseline dark-current rate, and four hot pixels with a 5,000-electron/s
+dark-current rate.
 
-### 4.1 Windowed intensity-weighted centroid
+The sensor chain is applied in the following order:
 
-TODO: Describe peak detection, ROI, background estimation, subtraction policy, quality flags, and expected failure modes.
+1. generate expected spot, background, and dark-current charge;
+2. apply a persistent multiplicative PRNU gain map;
+3. sample the total expected charge using independent Poisson draws;
+4. add independent Gaussian read noise in electrons;
+5. convert electrons to DN;
+6. apply full-well and ADC clipping;
+7. apply round-to-nearest quantization when enabled.
 
-### 4.2 Pixel-integrated 2D Gaussian fit
+Photon noise, read noise, dark current, background, PRNU, and hot pixels can
+be enabled independently through `NoiseConfig`. Quantization and saturation
+are controlled through `SensorConfig`. Fixed-pattern maps persist for the
+lifetime of a simulator and therefore persist across a dynamic sequence.
 
-TODO: Describe the fitted parameters, pixel-integrated model, noise weighting, analytical Jacobian, initialization, bounds, convergence handling, and model mismatch.
+## 3. Localization estimators
 
-## 5. Theoretical precision reference
+Both estimators use the full image only to locate the brightest finite pixel.
+They then operate on a local, odd-sized ROI and never use the simulator's true
+position. The default centroid ROI is 13 × 13 pixels and the default Gaussian
+fit ROI is 15 × 15 pixels.
 
-TODO: Derive and explain the Fisher-information/CRLB reference, nuisance parameters, noise approximation, and why clipping, quantization, and unmodeled fixed-pattern effects are outside the clean bound.
+### 3.1 Background-subtracted intensity centroid
 
-## 6. Static characterization
+The centroid estimator fits either a constant background or a plane to the
+border of the local ROI:
 
-TODO: Document Monte Carlo design, SNR sweep, trial counts, random-position and pixel-phase sampling, ROI sensitivity, error bars, and failure handling.
+\[
+B(x,y)=b_0+b_x(x-c_x)+b_y(y-c_y).
+\]
 
-Include measured bias, standard deviation, RMSE, outliers/failures, and comparison with the theoretical reference.
+The fitted background is subtracted from the ROI, negative residuals are
+clipped to zero, and the remaining intensities are used as weights:
+
+\[
+\hat{x}=\frac{\sum_i w_i x_i}{\sum_i w_i},\qquad
+\hat{y}=\frac{\sum_i w_i y_i}{\sum_i w_i}.
+\]
+
+The estimator returns the position, ROI bounds, peak value, saturation flag,
+positive signal, and fitted background coefficients. It returns an explicit
+failure result when the image contains no usable signal rather than returning
+an arbitrary bounded coordinate.
+
+The centroid is computationally simple and interpretable. It is nevertheless
+sensitive to background-model error, hot pixels, clipping, ROI truncation,
+and the removal of faint PSF tails during background subtraction.
+
+### 3.2 Pixel-integrated Gaussian fit
+
+The second estimator fits the parameter vector
+
+\[
+\theta=(x_0,y_0,A,\sigma,b_0,b_x,b_y),
+\]
+
+where \(A\) is total spot flux in DN and the background is a local plane. The
+spot contribution is integrated over each pixel using normal-CDF differences,
+matching the simulator's forward model. Position, flux, and width are bounded
+by configurable limits. Background coefficients remain unbounded.
+
+The initial position is obtained from the centroid when available and from
+the peak pixel otherwise. The fit uses bounded SciPy `least_squares` with an
+analytical Jacobian. Two fixed iteratively reweighted steps approximate
+Poisson-plus-read-noise weighting using
+
+\[
+V_i\approx\frac{\max(\mu_i,0)}{g}+\sigma_{r,DN}^2,
+\]
+
+where \(g\) is the electrons-per-DN conversion gain. A configurable 1 DN²
+floor is applied to the first term before weighting, preventing tiny or
+negative fitted tail-background values from receiving numerically dominant
+weights. Pixels at the ADC limit
+are excluded when saturation is enabled. The implementation records optimizer
+cost, function evaluations, optimality, fitted width and flux, background
+coefficients, valid-pixel count, and saturation count.
+
+This method uses more information than the centroid and can estimate the
+spot shape and background jointly. It is also more computationally expensive
+and can fail under low SNR, poor initialization, saturation, or model
+mismatch. It is therefore described as a noise-weighted nonlinear fit, or
+quasi-MLE, rather than an exact likelihood for clipped and quantized data.
+
+## 4. Verification of the current implementation
+
+The current test suite contains 31 tests. The tests are deterministic and
+use statistical tolerances where random sampling is involved. They cover:
+
+- pixel-integrated PSF flux conservation and symmetry;
+- sub-pixel position response and coordinate conventions;
+- scenario and configuration validation;
+- independent reproducibility of named random-number-generator streams;
+- persistent PRNU, dark-current, and hot-pixel maps;
+- Poisson and read-noise sample statistics;
+- SNR-to-flux monotonicity and reference-SNR inversion;
+- ADC quantization, clipping, and saturation invariants;
+- independent noise-component ablations;
+- background-gradient orientation and exposure scaling;
+- composed Poisson/read-noise behavior and edge behavior;
+- clean centroid and Gaussian-fit recovery;
+- analytical Gaussian Jacobian agreement with finite differences;
+- explicit failure on unusable frames;
+- saturation handling in the Gaussian fit;
+- reproducibility and bounds of the trajectory generator;
+- headless rendering of one live-GUI update;
+- characterization metrics, lock-loss classification, and the theoretical
+  precision reference;
+- runtime benchmark output and latency-statistic formatting.
+
+The clean Gaussian-fit test recovers the injected sub-pixel position to
+numerical precision, while the centroid test uses a looser tolerance
+appropriate to finite ROI background subtraction. These tests verify the
+implementation but are not substitutes for the required Monte Carlo
+characterization.
+
+## 5. Static accuracy characterization
+
+The static characterization runner uses Monte Carlo trials over the
+configured SNR sweep. The clean reference condition holds the PSF width and
+background fixed and disables clipping and quantization. The stressed
+condition enables the configured sensor effects and sigma variation. Spot
+positions are sampled within the safe frame margin, and the same positions,
+fixed-pattern maps, and rendered frames are used for both estimators at each
+SNR.
+
+For each estimator and SNR, the following quantities are reported for
+both axes and radially where appropriate:
+
+- signed bias;
+- standard deviation;
+- RMSE;
+- median and 95th-percentile absolute error;
+- invalid-result, failure, and outlier rates;
+- x/y error covariance and correlation.
+
+In addition to unconditional statistics, a lock-loss threshold of 1 pixel is
+used for simulation analysis. A formal estimator failure is an invalid result
+or optimizer failure; a lock loss is either such a failure or a finite result
+whose radial error exceeds the threshold. Conditional bias and precision are
+reported only for locked trials. This truth-based lock classification is
+appropriate for evaluating the simulator, but a deployed system would need
+operational quality flags rather than access to the true position.
+
+The required error-versus-SNR plots are generated by the offline
+characterization pipeline. The live GUI's position-error time history is a
+diagnostic display and does not replace these plots. A stressed-sensor ROI
+sensitivity study was run at SNR 3, 10, and 30 using 200 trials per setting.
+The 13 × 13 centroid ROI remains the selected compromise: a 15 × 15 ROI
+reduces some truncation error but increases low-SNR lock loss. The 15 × 15
+Gaussian ROI is retained because it gives slightly lower high-SNR error and
+similar or lower lock loss than the smaller choices.
+
+The final ideal and stressed sweeps used 1,000 trials at each of the seven
+configured SNR values. They produced machine-readable CSV and JSON output
+together with four-panel figures. The ideal-profile repeat produced
+byte-identical output, confirming deterministic reproduction. At SNR 1 in the
+stressed profile, lock loss was 96.5% for the centroid and 90.1% for the
+Gaussian fit. At SNR 3, the corresponding rates were 21.8% and 7.3%; both
+estimators had zero lock loss at SNR 10 and above until centroid saturation
+caused lock loss at SNR 300 and 1000. The Gaussian fit remained locked in
+those high-flux cases because saturated pixels were masked.
+
+| Profile | SNR | Centroid radial RMSE [px] | Gaussian radial RMSE [px] | Centroid lock loss | Gaussian lock loss |
+|---|---:|---:|---:|---:|---:|
+| Ideal | 1 | 0.635 | 0.900 | 7.2% | 26.0% |
+| Ideal | 10 | 0.070 | 0.059 | 0.0% | 0.0% |
+| Ideal | 1000 | 0.020 | 0.0006 | 0.0% | 0.0% |
+| Stressed | 1 | 12.757 | 14.438 | 96.5% | 90.1% |
+| Stressed | 3 | 4.239 | 4.811 | 21.8% | 7.3% |
+| Stressed | 10 | 0.161 | 0.081 | 0.0% | 0.0% |
+| Stressed | 1000 | 4.154 | 0.009 | 100.0% | 0.0% |
+
+## 6. Theoretical precision reference
+
+A Fisher-information reference has been computed from the pixel-integrated
+forward model. The nuisance-parameter vector includes position, flux, width,
+and planar-background terms. The reference uses the clean Poisson-plus-read-
+noise approximation, a 15 × 15 evaluation ROI, and an 8 × 8 grid of
+sub-pixel phases. The x/y variances are averaged over phase before taking the
+square root.
+
+For the ideal profile, the resulting radial reference standard deviations are
+0.564 pixels at SNR 1, 0.0564 pixels at SNR 10, and 0.000564 pixels at SNR
+1000. The reference is overlaid on the position-precision panel of the ideal
+characterization figure. It is a precision reference for the stated model,
+not a universal bound for the stressed results.
+
+This reference is a precision bound for the stated idealized model. ADC
+quantization, saturation, hot-pixel contamination, and unmodeled optical or
+sensor effects will be treated as model mismatch rather than implicitly
+included in the clean bound.
 
 ## 7. Real-time performance
 
-TODO: Report hardware/software environment, cold/warm timing, median, p95, p99, worst observed time, convergence failures, and the practical 1 kHz tradeoff.
+Runtime was measured on 200 already-generated frames at target SNR 10, with
+20 warm-up calls excluded from the statistics. This separates estimator cost
+from simulation cost. The nominal frame interval is 1 ms. The benchmark
+records cold-start centroid timing, cold-start Gaussian-fit timing, and
+Gaussian timing initialized from the previous estimate. It also records
+failure rate, 1 ms deadline misses, p95/p99 latency, and optimizer function
+evaluations.
+
+The measurements were obtained with Python 3.14.6, NumPy 2.5.1, SciPy 1.18.1
+on the recorded macOS arm64 development system.
+
+| Profile | Estimator | Initialization | Median [ms] | p95 [ms] | p99 [ms] | Worst [ms] | >1 ms |
+|---|---|---|---:|---:|---:|---:|---:|
+| Ideal | Centroid | cold | 0.054 | 0.060 | 0.063 | 0.096 | 0% |
+| Ideal | Gaussian | cold | 1.880 | 2.097 | 2.277 | 2.385 | 100% |
+| Ideal | Gaussian | warm | 1.980 | 2.751 | 6.865 | 7.841 | 100% |
+| Stressed | Centroid | cold | 0.057 | 0.104 | 0.146 | 0.233 | 0% |
+| Stressed | Gaussian | cold | 2.047 | 2.391 | 2.561 | 2.655 | 100% |
+| Stressed | Gaussian | warm | 2.021 | 2.234 | 2.470 | 2.538 | 100% |
+
+The centroid is comfortably below the nominal 1 ms estimator budget in this
+Python benchmark. The Gaussian fit is more accurate in many clean and
+stressed regimes, but its Python implementation does not meet a 1 kHz budget
+on this machine. Warm-starting reduced the median stressed latency slightly
+but did not meet the budget and produced a larger ideal-profile tail. It is
+therefore not treated as a guaranteed optimization.
+
+These measurements exclude camera transfer, image acquisition,
+preprocessing, synchronization, filtering, and gimbal output. They are a
+development baseline, not evidence of deterministic flight-hardware timing.
+A deployed implementation would likely use compiled C/C++ or dedicated FPGA
+logic, with the centroid as the natural low-latency baseline and the Gaussian
+fit reserved for slower supervisory, calibration, or high-confidence modes.
 
 ## 8. Dynamic tracking and disturbance recovery
 
-TODO: Describe the drift, jitter, periodic disturbance, SNR, frame count, persistent sensor maps, and why the scenario is challenging.
+The current trajectory generator is used for GUI and sanity checks. It
+contains bounded sinusoidal drift, correlated jitter, and a 73 Hz sinusoidal
+disturbance. The final dynamic experiment will replace the sinusoidal drift
+with a bounded correlated stochastic process implemented as a discrete
+Ornstein–Uhlenbeck process, equivalent to a first-order AR(1)/low-pass
+filtered random process. Its stationary RMS, correlation time, bounds, and
+seed will be reported explicitly. The 73 Hz component will remain the one
+intentional periodic disturbance.
 
-Report true versus recovered trajectory, position error, frequency, amplitude, uncertainty, detrending/windowing, and filtering effects.
+The final sequence will contain 2,000 frames during development and up to
+5,000 frames if the additional frequency resolution is useful and affordable.
+The same persistent sensor maps will be used throughout a sequence. For each
+frame, the estimator output and quality flags will be compared with the known
+trajectory. The analysis will report trajectory error, RMS and 95th-percentile
+error, disturbance frequency error, and disturbance amplitude error.
 
-## 9. Real-world conditions and robustness
+A detrended recovered trajectory will be analyzed using a Hann-windowed FFT
+or periodogram followed by sinusoidal least-squares refinement. Window
+coherent gain, FFT resolution, non-bin-aligned leakage, estimator failures,
+and the distinction between interpolation and true resolution will be
+documented.
 
-TODO: For each condition, describe its image signature, effect on bias/variance/outliers/latency, detection signal, and mitigation.
+## 9. Outdoor conditions and robustness
 
-At minimum discuss scintillation intensity fluctuations, beam wander/angle of arrival, thermal focus drift, vibration and motion blur, changing background, saturation/blooming, dust/defocus/misalignment, calibration drift, rolling shutter/timing, and end-to-end latency.
+The following conditions will be discussed in terms of image signature, effect
+on the estimate, detection signal, and mitigation:
+
+- scintillation and temporal intensity variation;
+- atmospheric beam wander and angle-of-arrival variation;
+- thermal focus or magnification drift;
+- platform vibration and exposure-time motion blur;
+- changing background illumination, glints, and nearby bright sources;
+- saturation, blooming, clipping, and transient reflections;
+- dust, contamination, defocus, misalignment, and partial occlusion;
+- PRNU, dark-current drift, hot pixels, lens distortion, and calibration drift;
+- rolling-shutter timing effects;
+- end-to-end camera, estimator, filter, and actuator latency.
+
+The analysis will distinguish bias, increased variance, outliers, dropouts,
+and latency. Candidate detection signals include saturation fraction,
+peak-to-background ratio, fitted width, residual structure, background-plane
+residuals, estimator disagreement, temporal quality measures, and persistent
+bad-pixel maps.
 
 ## 10. Assumptions and limitations
 
-Every material assumption must appear in the register below and be traceable to `report/decisions.md`. Numerical values must include units and must be labelled as an assumption, calibration, measurement, or limitation.
+The following register records the assumptions introduced so far. Each entry
+is also recorded in [decisions.md](decisions.md). Values are assumptions or
+calibrations for this exercise, not measurements of a deployed camera.
 
 | ID | Assumption or value | Units | Rationale | Expected effect | Validation or limitation |
 |---|---|---|---|---|---|
-| A-001 | Pixel-center coordinate convention | pixels | Keeps PSF, estimators, and theory consistent | Affects sub-pixel phase and boundary handling | Tested by PSF symmetry/shift tests |
-| A-002 | Image array is indexed as `image[y, x]`; positions are `(x, y)` | — | Separates array and Cartesian conventions | Prevents axis swaps | Tested in foundation tests |
-| A-003 | Pixel-integrated Gaussian PSF | — | Represents finite pixel area | Affects pixel-phase behavior and CRLB | Tested by flux/symmetry checks |
-| A-004 | Total expected spot electrons control brightness | electrons | Makes photon budget physically meaningful | Target SNR is mapped to total flux | SNR calibration experiment |
-| A-005 | 7 px 1/e² diameter implies sigma = 1.75 px | pixels | Conversion from assignment convention | Sets spot width, ROI, and precision | Algebra and simulator tests |
-| A-006 | Named RNG streams from one master seed | — | Reproducible independent experiments | Affects repeatability, not expected means | Same-seed test |
-| A-007 | 32×32 frame, 1 ms exposure, 1 kHz nominal rate | pixels, s, Hz | Simplified real-time scenario | Affects runtime and boundary margin | Configuration validation |
-| A-008 | 73 Hz primary disturbance | Hz | Bin-aligned for 2,000 and 5,000 frames at 1 kHz | Simplifies primary spectral result | Confirmed from sampling/grid calculation |
-| A-009 | PRNU multiplies expected total charge before Poisson sampling | dimensionless gain | Simple sensor-response convention | Changes mean and shot-noise statistics | Isolated simulator tests; model limitation |
-| A-010 | Hot pixels are elevated persistent dark-current rates | electrons/s | Captures fixed locations with stochastic dark noise | Creates persistent outliers and extra shot noise | Fixed-map test; simplified hot-pixel model |
-| A-011 | Read noise is additive Gaussian noise in electrons; ADC quantization rounds to nearest DN | electrons RMS, DN | Standard simplified readout model | Controls low-light floor and quantization behavior | Read-noise and ADC tests |
-| A-012 | Reference SNR uses a spot centered on a pixel; actual effective SNR is recorded separately | dimensionless | Avoids making the SNR control depend on random sub-pixel phase | Actual localization information can vary by phase | SNR calibration test and metadata |
-| A-013 | Stressed sigma variation is 5% RMS around 1.75 pixels | pixels | Represents small optics variation without changing the clean reference | Changes peak signal and estimator model match | Sigma metadata; dynamic/static experiments |
-| A-014 | Default stressed sensor uses 1% PRNU, 50 electrons/s dark current, 4 hot pixels at 5,000 electrons/s, 3 electrons RMS read noise, 12-bit ADC, and 1 electron/DN | mixed | Explicit engineering assumptions for the simplified camera | Sets realistic stress level and saturation feasibility | Sensitivity analysis and report limitation |
-| A-015 | Major noise/effect switches are controlled independently through `NoiseConfig` | — | Supports ablation tests and isolates causes of estimator error | Makes component-level validation possible | Toggle test; combinations still require experiment coverage |
-| A-016 | Visual sanity check reuses the production simulator API | — | Prevents a separate visualization model from hiding simulator errors | Improves development/debugging confidence | Headless figure generation |
-| — | Additional assumptions to be added during implementation | — | — | — | — |
+| A-001 | Pixel centers are integer coordinates and boundaries are half a pixel away | pixels | Maintains a consistent forward model | Affects phase and boundary behavior | PSF tests |
+| A-002 | Arrays use `image[y, x]`; positions use `(x, y)` | — | Separates array and Cartesian conventions | Prevents axis swaps | Foundation tests |
+| A-003 | The PSF is a pixel-integrated circular Gaussian | — | Represents finite pixel area | Affects phase response and theory | Flux and symmetry tests |
+| A-004 | Brightness is controlled by total expected spot electrons | electrons | Gives SNR and shot noise physical meaning | Determines photon statistics | SNR calibration |
+| A-005 | A 7-pixel 1/e² diameter corresponds to sigma = 1.75 pixels | pixels | Converts the assignment convention | Sets spot width and precision | Algebra and simulator tests |
+| A-006 | Named RNG streams derive from one master seed | — | Preserves reproducibility | Controls repeatability | Same-seed tests |
+| A-007 | The nominal sensor is 32 × 32 pixels, 1 ms exposure, and 1 kHz | pixels, s, Hz | Simplified real-time scenario | Sets geometry and timing budget | Configuration validation |
+| A-008 | The primary disturbance is 73 Hz | Hz | Aligns with 2,000- and 5,000-frame FFT bins at 1 kHz | Simplifies the baseline spectral result | Sampling-grid calculation |
+| A-009 | PRNU multiplies expected total charge before Poisson sampling | gain | Explicit sensor-response convention | Changes means and shot-noise variance | Ablation tests; model limitation |
+| A-010 | Hot pixels have persistent elevated dark-current rates | electrons/s | Captures fixed spatial outliers | Adds persistent stochastic contamination | Fixed-map tests |
+| A-011 | Read noise is additive Gaussian noise in electrons; quantization rounds to nearest DN | electrons RMS, DN | Standard simplified readout model | Controls low-light behavior | Noise and ADC tests |
+| A-012 | Reference SNR uses a pixel-centered spot; effective SNR is also recorded | dimensionless | Avoids phase-dependent SNR labels | Separates sweep control from actual frame information | SNR tests and metadata |
+| A-013 | Stressed sigma variation is 5% RMS about 1.75 pixels | pixels | Represents modest optical variation | Produces model mismatch | Frame metadata; later sensitivity study |
+| A-014 | Default stressed parameters are 1% PRNU, 50 electrons/s dark current, four 5,000-electron/s hot pixels, 3-electron read noise, 12-bit ADC, and 1 electron/DN | mixed | Controlled engineering assumptions | Sets stress and saturation regime | Later sensitivity study |
+| A-015 | Major noise effects have independent switches | — | Enables ablation studies | Supports causal diagnosis | Toggle tests |
+| A-016 | The visual sanity tool reuses the production simulator | — | Prevents a second visualization model | Improves debugging confidence | Headless figure generation |
+| A-017 | Both estimators use full-frame peak detection and local odd-sized ROIs; defaults are 13 × 13 and 15 × 15 | pixels | Provides a fair input contract | Affects bias, variance, and runtime | Estimator tests; stressed ROI sensitivity study |
+| A-018 | Centroid background is fitted on the ROI border; negative residuals are clipped | DN, pixels | Handles the nominal background gradient | Can remove weak PSF tails | Clean test; sensitivity study pending |
+| A-019 | The Gaussian fit estimates position, flux, width, and planar background with the pixel-integrated model | DN, pixels | Matches the simulator and estimates nuisance terms | Model mismatch affects bias and convergence | Jacobian and clean-fit tests |
+| A-020 | Gaussian fitting uses bounded least squares, two IRLS steps, ADC-limit masking, and a configurable 1 DN² variance floor | mixed | Controls optimizer behavior and prevents extreme tail-pixel weights | Approximate weighting affects stressed results | Jacobian and saturation tests |
+| A-021 | The GUI reuses the production simulator, trajectory generator, and estimators | — | Keeps the demonstration consistent | GUI is not authoritative scientific output | Headless GUI test |
+| A-022 | GUI display timing defaults to 50 ms and is not a 1 kHz benchmark | ms, Hz | Makes the display usable | Separates visualization from latency evidence | Dedicated runtime benchmark complete |
+| A-023 | The GUI sanity mode uses 1.5-pixel, 0.4-Hz sinusoidal drift, 0.04-pixel correlated jitter, and a 0.05-pixel 73-Hz disturbance | pixels, Hz | Provides an easily inspected deterministic motion mode | It is not the final stochastic dynamic model | Trajectory reproducibility test |
+| A-024 | The final dynamic drift will be a discrete OU/AR(1) process with explicit RMS, correlation time, bounds, and seed | pixels, s | Avoids unbounded Brownian drift and isolates one intentional periodic disturbance | Drift statistics affect recovery and spectral analysis | Dynamic pilot pending |
+| A-025 | Static SNR sweeps reuse trial positions and fixed-pattern maps across SNR values, and both estimators process the same rendered frames | — | Reduces avoidable Monte Carlo comparison variance | Makes estimator comparisons more paired and reproducible | Final ideal and stressed sweeps |
+| A-026 | Gaussian IRLS uses a configurable 1 DN² lower bound on approximate Poisson/read-noise variance | DN² | Prevents extreme weights from tiny or negative fitted tail-background values | Changes approximate fit weighting in low-signal tails | Final sweeps; likelihood remains approximate |
+| A-027 | Runtime frames are generated before timing; 20 warm-up calls are excluded; centroid cold and Gaussian cold/warm paths are timed against a 1 ms interval | ms, frames | Separates estimator execution from simulation and initialization overhead | Determines reported latency and deadline-miss rates | 200-frame ideal and stressed benchmark |
 
-## 11. Failure modes and future work
+## 11. Reproducibility and implementation status
 
-TODO: State where each estimator breaks, what was not implemented, and what would be done with more time. Separate completed optional extensions from proposed future work.
+The project uses the `transcelestial` Conda environment and requires NumPy,
+SciPy, Matplotlib, and pytest. The current test command is:
 
-## 12. Reproduction
+```bash
+conda run -n transcelestial python -m pytest -q
+```
 
-TODO: Document environment setup, `python run_all.py`, test command, configuration profile, seed, expected outputs, and approximate runtime.
+The live demonstration can be launched with:
 
-## 13. Assignment traceability matrix
+```bash
+python -m experiments.live_gui --profile sensor --snr 10
+```
 
-This matrix must be complete before submission. “Evidence” should identify the report section, implementation module, result file, or figure.
+The GUI is an optional review aid. It is not a replacement for the required
+Monte Carlo plots, dynamic results, runtime measurements, or one-command
+reproduction workflow. The final repository will provide `python run_all.py`
+once those core experiments have been implemented.
+
+## 12. Assignment traceability
 
 | Assignment requirement | Evidence | Status |
 |---|---|---|
-| Configurable Gaussian spot at known sub-pixel position | Section 3; `sim/psf.py`; simulator tests | Implemented in Phase 1 |
-| Photon, read, dark, hot-pixel, gradient, PRNU, and quantization noise | Section 3; `sim/noise.py`; Phase 1 tests | Implemented in Phase 1 |
-| Explicit SNR control and sweep | Section 3/6; `config.py`; SNR calibration tests | Implemented in Phase 1; sweep pending |
-| At least two centroiding methods | Section 4; `estimators/` | Planned |
-| Bias and standard deviation versus SNR | Section 6; characterization results | Planned |
-| Theoretical precision reference | Section 5; `theory/crlb.py` | Planned |
-| Per-frame compute cost and 1 kHz tradeoff | Section 7; timing results | Planned |
-| Moving spot with drift, jitter, and periodic disturbance | Section 8; `sim/trajectory.py` | Planned |
-| Recovered trajectory error | Section 8; dynamic results | Planned |
-| Recovered disturbance frequency and amplitude | Section 8; spectral results | Planned |
-| Challenging parameters and failure modes | Sections 6, 8, and 11 | Planned |
-| Outdoor real-world conditions and handling | Section 9 | Planned |
-| One-command reproducibility | Section 12; `run_all.py`; README | Planned |
+| Configurable Gaussian spot at a known sub-pixel position | Sections 2.1–2.2; `sim/psf.py`; tests | Implemented |
+| Photon, read, dark, hot-pixel, gradient, PRNU, and quantization noise | Section 2.3; `sim/noise.py`; tests | Implemented |
+| SNR control and SNR sweep | Section 2.2; `config.py`; `experiments/characterize_snr.py` | Complete; 1,000-trial results saved |
+| At least two centroiding methods | Section 3; `estimators/` | Implemented and characterized |
+| Bias and standard deviation versus SNR | Section 5; `experiments/characterize_snr.py`; characterization outputs | Complete; ideal and stressed figures saved |
+| Theoretical precision reference | Section 6; `experiments/theory.py`; characterization outputs | Complete for clean reference model |
+| Per-frame compute cost and 1 kHz tradeoff | Section 7; `experiments/benchmark_runtime.py`; runtime outputs | Complete Python baseline |
+| Moving spot with drift, jitter, and periodic disturbance | Section 8; `sim/trajectory.py` | Generator implemented; final OU scenario pending |
+| Recovered trajectory error | Section 8; planned dynamic outputs | Pending |
+| Recovered disturbance frequency and amplitude | Section 8; planned spectral outputs | Pending |
+| Challenging parameters and failure modes | Sections 3, 5, 8, and 10 | Partially documented; experiments pending |
+| Outdoor real-world conditions and handling | Section 9 | Analysis pending |
+| One-command reproducibility | Section 11; planned `run_all.py` | Pending |
 | Written report | This document | In progress |
-| Reproducible dynamic scenario and analysis | Section 8; saved results/configuration | Planned |
+| Reproducible dynamic scenario and analysis | Section 8; planned saved results | Pending |
+| Optional live interactive demonstration | Section 11; `experiments/live_gui.py` | Implemented |
+
+## 13. Current limitations and next steps
+
+The static characterization and Python runtime benchmark phases are complete.
+The characterization provides the quantitative evidence needed to compare
+estimators, select ROI settings, identify SNR regimes, expose lock-loss modes,
+and compare clean empirical precision with a Fisher-information reference.
+The immediate next step is the final dynamic experiment and the one-command
+reproduction workflow.
+
+The final dynamic study will use the discrete OU drift specified above and
+will report trajectory error and recovery of the injected periodic component.
+The live GUI may be used during the review to illustrate behavior under
+different conditions, but conclusions will be based on reproducible saved
+experiments rather than interactive screenshots.
