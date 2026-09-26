@@ -29,6 +29,7 @@
 - **A-025 — Static characterization protocol:** use one reproducible set of random sub-pixel positions for all requested SNR values, keep fixed-pattern maps constant for the sweep, evaluate both estimators on the same rendered frame, and save bias, standard deviation, RMSE, failure rate, and outlier rate in CSV/JSON form. The initial outlier threshold is 1 pixel and will be stated with the final results.
 - **A-026 — Gaussian IRLS variance floor:** use a configurable 1 DN² lower bound on the approximate Poisson/read-noise variance during Gaussian fitting. This prevents tiny negative or near-zero background-model values in PSF tails from creating numerically dominant weights, while keeping the fit's approximate-likelihood status explicit.
 - **A-027 — Runtime benchmark protocol:** generate and store the benchmark frames before timing, exclude a documented warm-up period, report percentile and worst-case latency, and compare each call with the 1 ms frame interval. Measure centroid cold-start and Gaussian cold/warm-start paths separately so simulator cost and initialization effects are not conflated with steady estimator cost.
+- **A-028 — Final dynamic analysis:** use a 5,000-frame, 1 kHz record with 0.6-pixel OU drift RMS, 0.25-second correlation time, ±2-pixel bounds, 0.04-pixel correlated jitter, and one 73 Hz, 0.05-pixel x-axis disturbance. Apply a Hann window, exclude frequencies below 20 Hz during disturbance identification, and refine the spectral peak with sinusoidal least squares.
 
 ## Assumption-register requirements
 

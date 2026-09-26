@@ -38,7 +38,7 @@ The simulator currently provides:
 - an interactive live demo with SNR, noise, sensor, motion, and estimator controls.
 - a static Monte Carlo characterization runner with CSV/JSON output and plots.
 
-The validation suite currently contains 31 tests covering component
+The validation suite currently contains 32 tests covering component
 statistics, noise ablations, ADC invariants, edge behavior, metadata,
 reproducibility, estimator recovery, Jacobian correctness, and estimator
 failure handling, trajectory reproducibility, and characterization metrics.
@@ -48,8 +48,10 @@ sensitivity study are implemented. Final 1,000-trial ideal and stressed
 results are saved under `results/final_ideal/` and `results/final_sensor/`,
 with figures under `figures/`. The runtime benchmark is implemented and its
 initial ideal/stressed results are saved under `results/runtime_ideal/` and
-`results/runtime_sensor/`. The dynamic and final one-command reproduction
-pipelines are still being implemented.
+`results/runtime_sensor/`. The final dynamic experiment is implemented; its
+5,000-frame trajectory, summary, and spectrum outputs are saved under
+`results/dynamic/`, with the figure under `figures/dynamic_tracking.png`.
+The final one-command reproduction pipeline is still being implemented.
 
 The characterization pilot can be run with:
 

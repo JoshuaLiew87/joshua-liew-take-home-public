@@ -448,6 +448,15 @@ Report:
 
 The filter result, if implemented, must report its latency and attenuation of the disturbance. It must not silently replace the raw estimator result.
 
+Phase 5 implementation checkpoint: `experiments/dynamic_tracking.py` now
+generates a shared 5,000-frame dynamic sequence, estimates both trajectories,
+saves per-frame results and summary metrics, and recovers the periodic
+disturbance using a Hann-windowed FFT followed by sinusoidal least-squares
+refinement. The `dynamic` profile uses the final OU/AR(1) drift parameters
+recorded in the report. The 73 Hz frequency and 0.05-pixel amplitude were
+recovered with zero estimator failures and zero lock loss at SNR 10; the
+trajectory and spectrum figure are saved under `figures/`.
+
 ## 12. Phase 6: real-world conditions analysis
 
 The report will use a table with columns for image signature, effect on estimate, detection signal, and mitigation. Cover at least:

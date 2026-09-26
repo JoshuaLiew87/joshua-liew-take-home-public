@@ -185,8 +185,12 @@ class TrajectoryConfig:
     frame_rate_hz: float = 1000.0
     center_x_px: float = 15.5
     center_y_px: float = 15.5
+    drift_model: Literal["sinusoidal", "ou"] = "sinusoidal"
     drift_amplitude_px: float = 1.5
     drift_frequency_hz: float = 0.4
+    ou_drift_rms_px: float = 0.6
+    ou_correlation_time_s: float = 0.25
+    ou_bound_px: float = 2.0
     jitter_rms_px: float = 0.04
     jitter_correlation: float = 0.95
     # 73 Hz is aligned to both 0.5 Hz bins (2,000 frames) and 0.2 Hz bins
@@ -207,6 +211,10 @@ class TrajectoryConfig:
             raise ValueError("trajectory center must be finite")
         if self.drift_amplitude_px < 0 or self.drift_frequency_hz < 0:
             raise ValueError("drift parameters cannot be negative")
+        if self.drift_model not in ("sinusoidal", "ou"):
+            raise ValueError("drift_model must be 'sinusoidal' or 'ou'")
+        if self.ou_drift_rms_px < 0 or self.ou_correlation_time_s <= 0 or self.ou_bound_px <= 0:
+            raise ValueError("OU drift parameters are invalid")
         if self.jitter_rms_px < 0 or not 0 <= self.jitter_correlation < 1:
             raise ValueError("jitter parameters are invalid")
         if not 0 < self.disturbance_frequency_hz < self.frame_rate_hz / 2:
@@ -282,7 +290,14 @@ def scenario_config(profile: Literal["ideal", "sensor", "dynamic"] = "sensor") -
         )
         spot = replace(spot, sigma_rms_fraction=0.0)
     elif profile == "dynamic":
-        trajectory = replace(trajectory, development_frame_count=2000)
+        trajectory = replace(
+            trajectory,
+            development_frame_count=2000,
+            drift_model="ou",
+            ou_drift_rms_px=0.6,
+            ou_correlation_time_s=0.25,
+            ou_bound_px=2.0,
+        )
     elif profile != "sensor":
         raise ValueError(f"unknown scenario profile: {profile}")
 

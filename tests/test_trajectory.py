@@ -9,6 +9,7 @@ from sim.trajectory import TrajectoryGenerator
 
 def test_trajectory_contains_bounded_positions_and_is_reproducible() -> None:
     config = scenario_config("dynamic")
+    assert config.trajectory.drift_model == "ou"
     first = TrajectoryGenerator(
         config.trajectory,
         sensor_shape=(config.sensor.height_px, config.sensor.width_px),

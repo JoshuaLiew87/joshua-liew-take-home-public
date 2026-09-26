@@ -22,11 +22,14 @@ class TrajectoryGenerator:
         self.config.validate()
         self._frame_index = 0
         self._jitter = np.zeros(2, dtype=float)
+        self._drift = np.zeros(2, dtype=float)
         self._reset_jitter_scale()
 
     def _reset_jitter_scale(self) -> None:
         rho = self.config.jitter_correlation
         self._jitter_innovation_rms = self.config.jitter_rms_px * np.sqrt(1.0 - rho * rho)
+        self._ou_rho = np.exp(-1.0 / (self.config.frame_rate_hz * self.config.ou_correlation_time_s))
+        self._ou_innovation_rms = self.config.ou_drift_rms_px * np.sqrt(1.0 - self._ou_rho**2)
 
     @property
     def frame_index(self) -> int:
@@ -37,12 +40,28 @@ class TrajectoryGenerator:
 
         self._frame_index = 0
         self._jitter.fill(0.0)
+        self._drift.fill(0.0)
 
     def _position_at(self, frame_index: int) -> tuple[float, float]:
         t = frame_index / self.config.frame_rate_hz
-        drift_phase = 2.0 * np.pi * self.config.drift_frequency_hz * t
-        x = self.config.center_x_px + self.config.drift_amplitude_px * np.sin(drift_phase)
-        y = self.config.center_y_px + 0.6 * self.config.drift_amplitude_px * np.cos(drift_phase)
+        if self.config.drift_model == "ou":
+            if frame_index == 0:
+                self._drift.fill(0.0)
+            else:
+                self._drift = self._ou_rho * self._drift + self.rng.normal(
+                    0.0, self._ou_innovation_rms, size=2
+                )
+            self._drift = np.clip(
+                self._drift,
+                -self.config.ou_bound_px,
+                self.config.ou_bound_px,
+            )
+            x = self.config.center_x_px + self._drift[0]
+            y = self.config.center_y_px + self._drift[1]
+        else:
+            drift_phase = 2.0 * np.pi * self.config.drift_frequency_hz * t
+            x = self.config.center_x_px + self.config.drift_amplitude_px * np.sin(drift_phase)
+            y = self.config.center_y_px + 0.6 * self.config.drift_amplitude_px * np.cos(drift_phase)
 
         rho = self.config.jitter_correlation
         if frame_index == 0:

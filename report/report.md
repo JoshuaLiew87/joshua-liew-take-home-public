@@ -15,10 +15,11 @@ intensity centroid and a bounded pixel-integrated two-dimensional Gaussian
 fit. The current implementation also includes a reproducible trajectory
 generator, a static Monte Carlo characterization runner, and an optional live
 visualization. At this checkpoint, the simulator, estimators, static
-characterization, and runtime benchmark have been verified by 31 automated
-tests. The dynamic recovery analysis and final `run_all.py` reproduction
-workflow remain to be completed. Consequently, the runtime result is treated
-as a Python development baseline rather than a flight-hardware guarantee.
+characterization, runtime benchmark, and dynamic recovery analysis have been
+verified by 32 automated tests. The final `run_all.py` reproduction workflow
+and real-world conditions analysis remain to be completed. Runtime results
+are treated as a Python development baseline rather than a flight-hardware
+guarantee.
 
 ## 1. Introduction
 
@@ -92,6 +93,11 @@ The sensor chain is applied in the following order:
 5. convert electrons to DN;
 6. apply full-well and ADC clipping;
 7. apply round-to-nearest quantization when enabled.
+
+The simulator's clipping mask records both high-side saturation and low-side
+negative excursions from additive read noise before ADC conversion. In the
+high-SNR dynamic result, the reported saturation behavior is dominated by
+high-side spot clipping; low-side clipping is a separate readout artifact.
 
 Photon noise, read noise, dark current, background, PRNU, and hot pixels can
 be enabled independently through `NoiseConfig`. Quantization and saturation
@@ -169,7 +175,7 @@ quasi-MLE, rather than an exact likelihood for clipped and quantized data.
 
 ## 4. Verification of the current implementation
 
-The current test suite contains 31 tests. The tests are deterministic and
+The current test suite contains 32 tests. The tests are deterministic and
 use statistical tolerances where random sampling is involved. They cover:
 
 - pixel-integrated PSF flux conservation and symmetry;
@@ -191,7 +197,8 @@ use statistical tolerances where random sampling is involved. They cover:
 - headless rendering of one live-GUI update;
 - characterization metrics, lock-loss classification, and the theoretical
   precision reference;
-- runtime benchmark output and latency-statistic formatting.
+- runtime benchmark output and latency-statistic formatting;
+- OU trajectory bounds/reproducibility and dynamic disturbance recovery.
 
 The clean Gaussian-fit test recovers the injected sub-pixel position to
 numerical precision, while the centroid test uses a looser tolerance
@@ -314,27 +321,44 @@ fit reserved for slower supervisory, calibration, or high-confidence modes.
 
 ## 8. Dynamic tracking and disturbance recovery
 
-The current trajectory generator is used for GUI and sanity checks. It
-contains bounded sinusoidal drift, correlated jitter, and a 73 Hz sinusoidal
-disturbance. The final dynamic experiment will replace the sinusoidal drift
-with a bounded correlated stochastic process implemented as a discrete
-Ornstein–Uhlenbeck process, equivalent to a first-order AR(1)/low-pass
-filtered random process. Its stationary RMS, correlation time, bounds, and
-seed will be reported explicitly. The 73 Hz component will remain the one
-intentional periodic disturbance.
+The final dynamic sequence contains 5,000 frames sampled at 1 kHz, giving a
+5-second record and 0.2 Hz FFT-bin spacing. The target reference SNR is 10.
+The trajectory uses a discrete Ornstein–Uhlenbeck drift with stationary RMS
+0.6 pixels, correlation time 0.25 seconds, and ±2-pixel drift bounds. The
+independent jitter has 0.04-pixel RMS and correlation coefficient 0.95. One
+73 Hz sinusoidal disturbance with 0.05-pixel amplitude is injected on the x
+axis. The same persistent sensor maps and rendered frames are passed to both
+estimators.
 
-The final sequence will contain 2,000 frames during development and up to
-5,000 frames if the additional frequency resolution is useful and affordable.
-The same persistent sensor maps will be used throughout a sequence. For each
-frame, the estimator output and quality flags will be compared with the known
-trajectory. The analysis will report trajectory error, RMS and 95th-percentile
-error, disturbance frequency error, and disturbance amplitude error.
+The disturbance amplitude is 1.25 times the per-frame jitter RMS, so it is
+deliberately detectable but not overwhelmingly larger than the instantaneous
+measurement variation. Its recovered spectral peak is 14.6 times the estimated
+noise floor for the centroid and 25.4 times the noise floor for the Gaussian
+fit.
 
-A detrended recovered trajectory will be analyzed using a Hann-windowed FFT
-or periodogram followed by sinusoidal least-squares refinement. Window
-coherent gain, FFT resolution, non-bin-aligned leakage, estimator failures,
-and the distinction between interpolation and true resolution will be
-documented.
+The recovered signals are not filtered before the primary result. Invalid
+samples would be linearly filled only for the evenly sampled spectral
+analysis; all trajectory-error metrics retain the original validity mask. A
+Hann window is applied before the FFT. Because the OU process intentionally
+occupies the low-frequency band, disturbance identification searches above
+20 Hz, then refines the FFT peak by sinusoidal least squares including a
+constant and linear trend. This separates slow drift from the intentional
+periodic component without claiming more frequency resolution than the
+5,000-sample record provides.
+
+| Estimator | RMS error [px] | 95th percentile [px] | Estimated frequency [Hz] | Frequency error [Hz] | Estimated amplitude [px] | Amplitude error [px] | Peak/noise |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Windowed centroid | 0.1636 | 0.2782 | 72.9934 | 0.0066 | 0.0563 | 0.0063 | 14.6 |
+| Gaussian fit | 0.0817 | 0.1405 | 72.9974 | 0.0026 | 0.0565 | 0.0065 | 25.4 |
+
+Both estimators produced 5,000 valid estimates with zero formal failures and
+zero lock loss at SNR 10. The Gaussian fit has approximately half the RMS
+trajectory error and a stronger recovered spectral peak, at the cost of the
+runtime measured in Section 7. The recovered amplitudes are slightly above
+the injected value, which is expected for a finite noisy record and is
+reported rather than corrected away. The result is shown in
+[dynamic_tracking.png](../figures/dynamic_tracking.png), and the per-frame
+trajectory plus summary files are saved under `results/dynamic/`.
 
 ## 9. Outdoor conditions and robustness
 
@@ -389,10 +413,11 @@ calibrations for this exercise, not measurements of a deployed camera.
 | A-021 | The GUI reuses the production simulator, trajectory generator, and estimators | — | Keeps the demonstration consistent | GUI is not authoritative scientific output | Headless GUI test |
 | A-022 | GUI display timing defaults to 50 ms and is not a 1 kHz benchmark | ms, Hz | Makes the display usable | Separates visualization from latency evidence | Dedicated runtime benchmark complete |
 | A-023 | The GUI sanity mode uses 1.5-pixel, 0.4-Hz sinusoidal drift, 0.04-pixel correlated jitter, and a 0.05-pixel 73-Hz disturbance | pixels, Hz | Provides an easily inspected deterministic motion mode | It is not the final stochastic dynamic model | Trajectory reproducibility test |
-| A-024 | The final dynamic drift will be a discrete OU/AR(1) process with explicit RMS, correlation time, bounds, and seed | pixels, s | Avoids unbounded Brownian drift and isolates one intentional periodic disturbance | Drift statistics affect recovery and spectral analysis | Dynamic pilot pending |
+| A-024 | The final dynamic drift is a discrete OU/AR(1) process with 0.6-pixel stationary RMS, 0.25-second correlation time, ±2-pixel drift bounds, and the saved master seed | pixels, s | Avoids unbounded Brownian drift and isolates one intentional periodic disturbance | Drift statistics affect recovery and spectral analysis | 5,000-frame dynamic sequence |
 | A-025 | Static SNR sweeps reuse trial positions and fixed-pattern maps across SNR values, and both estimators process the same rendered frames | — | Reduces avoidable Monte Carlo comparison variance | Makes estimator comparisons more paired and reproducible | Final ideal and stressed sweeps |
 | A-026 | Gaussian IRLS uses a configurable 1 DN² lower bound on approximate Poisson/read-noise variance | DN² | Prevents extreme weights from tiny or negative fitted tail-background values | Changes approximate fit weighting in low-signal tails | Final sweeps; likelihood remains approximate |
 | A-027 | Runtime frames are generated before timing; 20 warm-up calls are excluded; centroid cold and Gaussian cold/warm paths are timed against a 1 ms interval | ms, frames | Separates estimator execution from simulation and initialization overhead | Determines reported latency and deadline-miss rates | 200-frame ideal and stressed benchmark |
+| A-028 | The final dynamic record uses 5,000 frames at 1 kHz, 0.04-pixel correlated jitter, a 73 Hz/0.05-pixel x-axis disturbance, Hann-windowed spectral analysis, and a 20 Hz lower search limit | frames, Hz, pixels | Provides frequency resolution while separating slow OU drift from the intentional disturbance | Analysis results depend on windowing, search band, and finite-record noise | Dynamic recovery output and 32-test suite |
 
 ## 11. Reproducibility and implementation status
 
@@ -412,7 +437,8 @@ python -m experiments.live_gui --profile sensor --snr 10
 The GUI is an optional review aid. It is not a replacement for the required
 Monte Carlo plots, dynamic results, runtime measurements, or one-command
 reproduction workflow. The final repository will provide `python run_all.py`
-once those core experiments have been implemented.
+once the completed experiments have been integrated into one clean-output
+workflow.
 
 ## 12. Assignment traceability
 
@@ -425,27 +451,27 @@ once those core experiments have been implemented.
 | Bias and standard deviation versus SNR | Section 5; `experiments/characterize_snr.py`; characterization outputs | Complete; ideal and stressed figures saved |
 | Theoretical precision reference | Section 6; `experiments/theory.py`; characterization outputs | Complete for clean reference model |
 | Per-frame compute cost and 1 kHz tradeoff | Section 7; `experiments/benchmark_runtime.py`; runtime outputs | Complete Python baseline |
-| Moving spot with drift, jitter, and periodic disturbance | Section 8; `sim/trajectory.py` | Generator implemented; final OU scenario pending |
-| Recovered trajectory error | Section 8; planned dynamic outputs | Pending |
-| Recovered disturbance frequency and amplitude | Section 8; planned spectral outputs | Pending |
-| Challenging parameters and failure modes | Sections 3, 5, 8, and 10 | Partially documented; experiments pending |
+| Moving spot with drift, jitter, and periodic disturbance | Section 8; `sim/trajectory.py`; `experiments/dynamic_tracking.py` | Complete; 5,000-frame OU sequence saved |
+| Recovered trajectory error | Section 8; dynamic summary and trajectory outputs | Complete |
+| Recovered disturbance frequency and amplitude | Section 8; dynamic spectrum and summary outputs | Complete |
+| Challenging parameters and failure modes | Sections 3, 5, 8, and 10 | Core estimator/dynamic cases documented; outdoor analysis pending |
 | Outdoor real-world conditions and handling | Section 9 | Analysis pending |
 | One-command reproducibility | Section 11; planned `run_all.py` | Pending |
 | Written report | This document | In progress |
-| Reproducible dynamic scenario and analysis | Section 8; planned saved results | Pending |
+| Reproducible dynamic scenario and analysis | Section 8; `results/dynamic/` | Complete |
 | Optional live interactive demonstration | Section 11; `experiments/live_gui.py` | Implemented |
 
 ## 13. Current limitations and next steps
 
-The static characterization and Python runtime benchmark phases are complete.
+The static characterization, Python runtime benchmark, and dynamic tracking
+phases are complete.
 The characterization provides the quantitative evidence needed to compare
 estimators, select ROI settings, identify SNR regimes, expose lock-loss modes,
 and compare clean empirical precision with a Fisher-information reference.
-The immediate next step is the final dynamic experiment and the one-command
-reproduction workflow.
+The immediate next step is the real-world conditions analysis and the
+one-command reproduction workflow.
 
-The final dynamic study will use the discrete OU drift specified above and
-will report trajectory error and recovery of the injected periodic component.
 The live GUI may be used during the review to illustrate behavior under
 different conditions, but conclusions will be based on reproducible saved
-experiments rather than interactive screenshots.
+experiments rather than interactive screenshots. The remaining implementation
+work is the real-world conditions analysis and the final `run_all.py` workflow.
