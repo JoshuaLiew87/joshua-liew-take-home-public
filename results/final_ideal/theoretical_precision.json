@@ -75,10 +75,14 @@
       "disturbance_frequency_hz": 73.0,
       "drift_amplitude_px": 1.5,
       "drift_frequency_hz": 0.4,
+      "drift_model": "sinusoidal",
       "final_frame_count": 5000,
       "frame_rate_hz": 1000.0,
       "jitter_correlation": 0.95,
-      "jitter_rms_px": 0.04
+      "jitter_rms_px": 0.04,
+      "ou_bound_px": 2.0,
+      "ou_correlation_time_s": 0.25,
+      "ou_drift_rms_px": 0.6
     }
   },
   "model": "pixel-integrated Gaussian with Poisson/read-noise Fisher information",

@@ -5,6 +5,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
+from types import SimpleNamespace
 
 from config import scenario_config
 from experiments.live_gui import LiveLocalizationDemo
@@ -23,3 +24,42 @@ def test_live_gui_can_render_one_headless_frame() -> None:
         assert len(demo.error_history) == demo.sensor_frames_per_update
     finally:
         plt.close(demo.figure)
+
+
+def test_live_gui_demo_shortcuts_control_review_scenarios() -> None:
+    demo = LiveLocalizationDemo(
+        scenario_config("sensor"),
+        snr=10.0,
+        display_interval_ms=50,
+    )
+    try:
+        demo._on_key_press(SimpleNamespace(key="up"))
+        assert demo.manual_offset_xy[1] == demo.manual_step_px
+        demo._on_key_press(SimpleNamespace(key="down"))
+        assert demo.manual_offset_xy[1] == 0.0
+        demo._on_key_press(SimpleNamespace(key="s"))
+        assert demo.manual_offset_xy[1] == 0.0
+
+        demo._on_key_press(SimpleNamespace(key="g"))
+        assert not demo.gradient_enabled
+        assert demo.config.background.gradient_x_e_per_px == 0.0
+        demo._on_key_press(SimpleNamespace(key="g"))
+        assert demo.gradient_enabled
+
+        demo._on_key_press(SimpleNamespace(key="h"))
+        demo._update_frame()
+        assert demo.hot_pixel_demo_enabled
+        assert demo.forced_hot_pixel_xy is not None
+
+        demo._on_key_press(SimpleNamespace(key="shift+s"))
+        assert demo.snr_slider.val == 1.0
+        demo._on_key_press(SimpleNamespace(key="shift+d"))
+        assert demo.snr_slider.val == 1000.0
+    finally:
+        plt.close(demo.figure)
+
+
+def test_live_gui_q_shortcut_closes_the_figure() -> None:
+    demo = LiveLocalizationDemo(scenario_config("sensor"), snr=10.0)
+    demo._on_key_press(SimpleNamespace(key="q"))
+    assert not plt.fignum_exists(demo.figure.number)

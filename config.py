@@ -8,7 +8,9 @@ will calibrate them to flux in a later phase.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Literal
 
 
@@ -253,7 +255,112 @@ class ScenarioConfig:
             raise ValueError("position margin leaves no valid interior region")
 
 
-def scenario_config(profile: Literal["ideal", "sensor", "dynamic"] = "sensor") -> ScenarioConfig:
+_CONFIG_SECTIONS = {
+    "sensor",
+    "spot",
+    "background",
+    "pattern",
+    "noise",
+    "estimator",
+    "experiment",
+    "trajectory",
+}
+_PROFILE_NAMES = {"ideal", "sensor", "dynamic"}
+
+
+def apply_scenario_overrides(
+    config: ScenarioConfig,
+    overrides: Mapping[str, Mapping[str, object]],
+) -> ScenarioConfig:
+    """Apply strict, nested overrides to one validated scenario.
+
+    YAML is intentionally an override layer.  Dataclass defaults and named
+    scenario profiles remain the source of truth for omitted values, while
+    unknown sections or fields fail early instead of being silently ignored.
+    """
+
+    if not isinstance(overrides, Mapping):
+        raise ValueError("scenario overrides must be a mapping")
+    updates: dict[str, object] = {}
+    for section, values in overrides.items():
+        if section not in _CONFIG_SECTIONS:
+            raise ValueError(
+                f"unknown scenario section {section!r}; expected one of "
+                f"{sorted(_CONFIG_SECTIONS)}"
+            )
+        if not isinstance(values, Mapping):
+            raise ValueError(f"overrides for {section!r} must be a mapping")
+        current = getattr(config, section)
+        field_names = {field.name for field in fields(current)}
+        unknown = set(values) - field_names
+        if unknown:
+            raise ValueError(
+                f"unknown fields in {section!r}: {sorted(unknown)}; "
+                f"expected one of {sorted(field_names)}"
+            )
+        section_values = dict(values)
+        if section == "experiment" and "snr_sweep" in section_values:
+            sweep = section_values["snr_sweep"]
+            if isinstance(sweep, (str, bytes)) or not hasattr(sweep, "__iter__"):
+                raise ValueError("experiment.snr_sweep must be a sequence")
+            section_values["snr_sweep"] = tuple(float(value) for value in sweep)
+        try:
+            updates[section] = replace(current, **section_values)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid overrides for {section!r}: {exc}") from exc
+    resolved = replace(config, **updates)
+    resolved.validate()
+    return resolved
+
+
+def load_yaml_overrides(path: str | Path) -> dict[str, dict[str, object]]:
+    """Load the supported YAML override document.
+
+    The document may contain ``pipeline`` controls for ``run_all.py`` and a
+    ``profiles`` mapping whose keys are ``ideal``, ``sensor``, or ``dynamic``.
+    """
+
+    try:
+        import yaml
+    except ImportError as exc:  # pragma: no cover - dependency is declared
+        raise RuntimeError("PyYAML is required for YAML configuration overrides") from exc
+
+    source = Path(path)
+    if not source.is_file():
+        raise FileNotFoundError(f"YAML override file does not exist: {source}")
+    document = yaml.safe_load(source.read_text(encoding="utf-8"))
+    if document is None:
+        return {"pipeline": {}, "profiles": {}}
+    if not isinstance(document, Mapping):
+        raise ValueError("YAML override document must be a mapping")
+    unknown_top_level = set(document) - {"pipeline", "profiles"}
+    if unknown_top_level:
+        raise ValueError(
+            f"unknown YAML top-level keys: {sorted(unknown_top_level)}; "
+            "expected 'pipeline' and/or 'profiles'"
+        )
+    pipeline = document.get("pipeline", {})
+    profiles = document.get("profiles", {})
+    if not isinstance(pipeline, Mapping):
+        raise ValueError("YAML 'pipeline' must be a mapping")
+    if not isinstance(profiles, Mapping):
+        raise ValueError("YAML 'profiles' must be a mapping")
+    unknown_profiles = set(profiles) - _PROFILE_NAMES
+    if unknown_profiles:
+        raise ValueError(f"unknown YAML profiles: {sorted(unknown_profiles)}")
+    normalized_profiles: dict[str, object] = {}
+    for profile, overrides in profiles.items():
+        if not isinstance(overrides, Mapping):
+            raise ValueError(f"YAML profile {profile!r} must be a mapping")
+        normalized_profiles[profile] = dict(overrides)
+    return {"pipeline": dict(pipeline), "profiles": normalized_profiles}
+
+
+def scenario_config(
+    profile: Literal["ideal", "sensor", "dynamic"] = "sensor",
+    *,
+    overrides: Mapping[str, Mapping[str, object]] | None = None,
+) -> ScenarioConfig:
     """Return a validated named scenario profile.
 
     Profiles share the same model and differ only in explicitly documented
@@ -312,5 +419,7 @@ def scenario_config(profile: Literal["ideal", "sensor", "dynamic"] = "sensor") -
         experiment=experiment,
         trajectory=trajectory,
     )
+    if overrides:
+        config = apply_scenario_overrides(config, overrides)
     config.validate()
     return config

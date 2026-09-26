@@ -426,6 +426,26 @@ def plot_dynamic_results(
     axes[1, 1].set_ylabel("amplitude [pixel]")
     axes[1, 1].grid(True, alpha=0.3)
     axes[1, 1].legend(fontsize="small")
+    summary_by_estimator = {summary.estimator: summary for summary in result.summaries}
+    recovery_lines = [
+        f"true: f={config.trajectory.disturbance_frequency_hz:.2f} Hz, "
+        f"A={config.trajectory.disturbance_amplitude_px:.3f} px"
+    ]
+    for estimator in result.estimates_xy:
+        summary = summary_by_estimator[estimator]
+        recovery_lines.append(
+            f"{labels[estimator]}: f={summary.estimated_frequency_hz:.3f} Hz, "
+            f"A={summary.estimated_amplitude_px:.4f} px"
+        )
+    axes[1, 1].text(
+        0.02,
+        0.97,
+        "\n".join(recovery_lines),
+        transform=axes[1, 1].transAxes,
+        va="top",
+        fontsize="small",
+        bbox={"facecolor": "white", "alpha": 0.8, "edgecolor": "0.7"},
+    )
     figure.suptitle("Dynamic sub-pixel trajectory recovery")
     figure.savefig(output, dpi=160)
     if show:

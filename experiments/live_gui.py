@@ -51,6 +51,7 @@ class LiveLocalizationDemo:
         self.snr = float(config.experiment.target_snr if snr is None else snr)
         self.estimator_name = estimator_name
         self.display_interval_ms = int(display_interval_ms)
+        self.lock_threshold_px = 1.0
         self.sensor_frames_per_update = max(
             1,
             round(self.config.sensor.frame_rate_hz * self.display_interval_ms / 1000.0),
@@ -58,6 +59,15 @@ class LiveLocalizationDemo:
         self.history_length = int(history_length)
         self.frame_index = 0
         self.paused = False
+        self.manual_step_px = 0.1
+        self.manual_offset_xy = np.zeros(2, dtype=float)
+        self._base_gradients = (
+            float(config.background.gradient_x_e_per_px),
+            float(config.background.gradient_y_e_per_px),
+        )
+        self.gradient_enabled = any(abs(value) > 0.0 for value in self._base_gradients)
+        self.hot_pixel_demo_enabled = False
+        self.forced_hot_pixel_xy: tuple[int, int] | None = None
         self.true_history: list[tuple[float, float]] = []
         self.estimated_history: list[tuple[float, float]] = []
         self.error_history: list[float] = []
@@ -101,6 +111,7 @@ class LiveLocalizationDemo:
         self.ax_image.set_ylabel("y [pixel]")
         (self.true_marker,) = self.ax_image.plot([], [], "c+", ms=12, mew=2, label="true")
         (self.estimated_marker,) = self.ax_image.plot([], [], "wo", ms=7, mfc="none", label="estimated")
+        (self.hot_pixel_marker,) = self.ax_image.plot([], [], "rx", ms=9, mew=2, label="demo hot pixel")
         self.ax_image.legend(loc="upper right", fontsize="small")
 
         self.ax_trace.set_title("Trajectory (x coordinate)")
@@ -137,7 +148,7 @@ class LiveLocalizationDemo:
                 valinit=value,
             )
 
-        self.snr_slider = make_slider(0.89, "SNR", 1.0, 100.0, self.snr)
+        self.snr_slider = make_slider(0.89, "SNR", 1.0, 1000.0, self.snr)
         self.drift_slider = make_slider(
             0.84,
             "Drift amplitude [px]",
@@ -168,7 +179,7 @@ class LiveLocalizationDemo:
         )
 
         self.noise_checks = CheckButtons(
-            self.figure.add_axes([left, 0.27, width, 0.25]),
+            self.figure.add_axes([left, 0.23, width, 0.23]),
             self._noise_labels,
             [
                 self.config.noise.photon_shot_enabled,
@@ -182,14 +193,28 @@ class LiveLocalizationDemo:
             ],
         )
         self.estimator_radio = RadioButtons(
-            self.figure.add_axes([left, 0.13, width, 0.10]),
+            self.figure.add_axes([left, 0.10, width, 0.09]),
             ("Gaussian fit", "Centroid"),
             active=0 if self.estimator_name == "Gaussian fit" else 1,
         )
         self.reset_button = Button(self.figure.add_axes([left, 0.06, 0.10, 0.04]), "Reset")
         self.pause_button = Button(self.figure.add_axes([left + 0.115, 0.06, 0.10, 0.04]), "Pause")
         self.status_text = self.figure.text(0.765, 0.655, "", va="top", fontsize="small")
+        self.help_text = self.figure.text(
+            0.765,
+            0.008,
+            "Keys: arrows = move 0.1 px\nShift+S/D = flux | G = gradient | H = hot pixel | Q/Esc = close",
+            va="bottom",
+            fontsize="x-small",
+        )
 
+        # Matplotlib's default key handler maps ``s`` to save-figure. The
+        # live demo reserves lowercase ``s`` for downward target nudges, so
+        # disconnect the default handler for this figure only.
+        default_key_handler_id = getattr(self.figure.canvas.manager, "key_press_handler_id", None)
+        if default_key_handler_id is not None:
+            self.figure.canvas.mpl_disconnect(default_key_handler_id)
+        self.figure.canvas.mpl_connect("key_press_event", self._on_key_press)
         self.snr_slider.on_changed(self._on_motion_control)
         self.drift_slider.on_changed(self._on_motion_control)
         self.jitter_slider.on_changed(self._on_motion_control)
@@ -199,6 +224,55 @@ class LiveLocalizationDemo:
         self.estimator_radio.on_clicked(self._on_estimator_change)
         self.reset_button.on_clicked(self.reset)
         self.pause_button.on_clicked(self.toggle_pause)
+
+    def _on_key_press(self, event) -> None:
+        """Handle review-demo shortcuts while the figure has focus."""
+
+        key = str(event.key)
+        if key.lower() in {"q", "escape"}:
+            self._timer.stop()
+            plt.close(self.figure)
+            return
+        if key in {"S", "shift+s"}:
+            self.snr_slider.set_val(1.0)
+            return
+        if key in {"D", "shift+d"}:
+            self.snr_slider.set_val(1000.0)
+            return
+
+        normalized_key = key.lower()
+        nudge = {
+            "left": (-self.manual_step_px, 0.0),
+            "right": (self.manual_step_px, 0.0),
+            "up": (0.0, self.manual_step_px),
+            "down": (0.0, -self.manual_step_px),
+        }.get(normalized_key)
+        if nudge is not None:
+            self.manual_offset_xy += np.asarray(nudge, dtype=float)
+            self.manual_offset_xy = np.clip(self.manual_offset_xy, -4.0, 4.0)
+            return
+        if normalized_key == "g":
+            self._toggle_gradient()
+        elif normalized_key == "h":
+            self._toggle_hot_pixel()
+
+    def _toggle_gradient(self) -> None:
+        self.gradient_enabled = not self.gradient_enabled
+        gradient_x, gradient_y = self._base_gradients if self.gradient_enabled else (0.0, 0.0)
+        self.config = replace(
+            self.config,
+            background=replace(
+                self.config.background,
+                gradient_x_e_per_px=gradient_x,
+                gradient_y_e_per_px=gradient_y,
+            ),
+        )
+        self.reset(None)
+
+    def _toggle_hot_pixel(self) -> None:
+        self.hot_pixel_demo_enabled = not self.hot_pixel_demo_enabled
+        self.forced_hot_pixel_xy = None
+        self.figure.canvas.draw_idle()
 
     def _on_motion_control(self, _value: float) -> None:
         trajectory = replace(
@@ -210,6 +284,45 @@ class LiveLocalizationDemo:
         )
         self.config = replace(self.config, trajectory=trajectory)
         self.reset(None)
+
+    def _position_with_manual_offset(self, position: tuple[float, float]) -> tuple[float, float]:
+        margin = self.config.spot.position_margin_px
+        height = self.config.sensor.height_px
+        width = self.config.sensor.width_px
+        x = np.clip(position[0] + self.manual_offset_xy[0], margin, width - 1.0 - margin)
+        y = np.clip(position[1] + self.manual_offset_xy[1], margin, height - 1.0 - margin)
+        return float(x), float(y)
+
+    def _inject_demo_hot_pixel(
+        self,
+        image_dn: np.ndarray,
+        true_position: tuple[float, float],
+    ) -> np.ndarray:
+        """Add one visible, persistent ROI-edge pixel for the GUI demonstration.
+
+        This is intentionally a display-only intervention. It does not alter
+        the production simulator or any offline experiment output.
+        """
+
+        image = np.asarray(image_dn, dtype=float).copy()
+        if not self.hot_pixel_demo_enabled:
+            return image
+        if self.forced_hot_pixel_xy is None:
+            half = self.config.estimator.gaussian_roi_size_px // 2
+            peak_x = int(round(true_position[0]))
+            peak_y = int(round(true_position[1]))
+            hot_x = int(np.clip(peak_x + half, 0, image.shape[1] - 1))
+            hot_y = int(np.clip(peak_y, 0, image.shape[0] - 1))
+            self.forced_hot_pixel_xy = (hot_x, hot_y)
+
+        background = float(np.nanmedian(image))
+        peak = float(np.nanmax(image))
+        hot_value = background + 0.5 * max(peak - background, 20.0)
+        if self.config.sensor.saturation_enabled:
+            hot_value = min(hot_value, self.config.sensor.adc_max_dn)
+        x, y = self.forced_hot_pixel_xy
+        image[y, x] = max(image[y, x], hot_value)
+        return image
 
     def _on_noise_toggle(self, label: str) -> None:
         index = self._noise_labels.index(label)
@@ -239,15 +352,16 @@ class LiveLocalizationDemo:
         frame = None
         result = None
         for _ in range(self.sensor_frames_per_update):
-            true_position = self.trajectory.next_position()
+            true_position = self._position_with_manual_offset(self.trajectory.next_position())
             frame = self.simulator.render(
                 true_position,
                 target_snr=float(self.snr_slider.val),
             )
+            image_dn = self._inject_demo_hot_pixel(frame.image_dn, true_position)
             if self.estimator_name == "Centroid":
-                result = estimate_centroid(frame.image_dn, self.config)
+                result = estimate_centroid(image_dn, self.config)
             else:
-                result = estimate_gaussian(frame.image_dn, self.config)
+                result = estimate_gaussian(image_dn, self.config)
 
             self.true_history.append(true_position)
             if result.success and result.position_xy is not None:
@@ -265,13 +379,18 @@ class LiveLocalizationDemo:
         self.error_history = self.error_history[-self.history_length :]
         true_position = self.true_history[-1]
         estimated_position = self.estimated_history[-1]
-        self.image_artist.set_data(frame.image_dn)
-        self.image_artist.set_clim(float(np.nanmin(frame.image_dn)), float(np.nanmax(frame.image_dn) + 1e-9))
+        self.image_artist.set_data(image_dn)
+        self.image_artist.set_clim(float(np.nanmin(image_dn)), float(np.nanmax(image_dn) + 1e-9))
         self.true_marker.set_data([true_position[0]], [true_position[1]])
         if not np.all(np.isfinite(estimated_position)):
             self.estimated_marker.set_data([], [])
         else:
             self.estimated_marker.set_data([estimated_position[0]], [estimated_position[1]])
+        if self.hot_pixel_demo_enabled and self.forced_hot_pixel_xy is not None:
+            hot_x, hot_y = self.forced_hot_pixel_xy
+            self.hot_pixel_marker.set_data([hot_x], [hot_y])
+        else:
+            self.hot_pixel_marker.set_data([], [])
         frames = np.arange(self.frame_index - len(self.true_history), self.frame_index)
         true_array = np.asarray(self.true_history)
         estimated_array = np.asarray(self.estimated_history)
@@ -284,17 +403,34 @@ class LiveLocalizationDemo:
         self.status_text.set_text(
             f"frame: {self.frame_index}\n"
             f"SNR: {self.snr_slider.val:.1f} (ref {frame.metadata.reference_snr:.2f})\n"
-            f"{self.estimator_name} | {'LOCKED' if result.success else 'FAILED'}\n"
+            f"target: ({true_position[0]:.2f}, {true_position[1]:.2f}) px | "
+            f"phase: ({true_position[0] % 1.0:.2f}, {true_position[1] % 1.0:.2f})\n"
+            f"{self.estimator_name} | {self._lock_status(result, self.error_history[-1])}\n"
+            f"radial error: {self.error_history[-1]:.2f} px\n"
+            f"gradient: {'ON' if self.gradient_enabled else 'OFF'} | "
+            f"hot pixel: {'ON' if self.hot_pixel_demo_enabled else 'OFF'}\n"
+            f"saturated pixels: {int(np.count_nonzero(image_dn >= self.config.sensor.adc_max_dn)) if self.config.sensor.saturation_enabled else 0}\n"
             f"display: {self.display_interval_ms} ms | sim: {self.sensor_frames_per_update} frames/update\n"
             "display only; not the 1 kHz benchmark"
         )
         self.figure.canvas.draw_idle()
+
+    def _lock_status(self, result, radial_error: float) -> str:
+        """Return a demo status separating fit convergence from truth-based lock."""
+
+        if not result.success:
+            return "FAILED"
+        if not np.isfinite(radial_error) or radial_error > self.lock_threshold_px:
+            return "FIT OK / OUT OF LOCK"
+        return "LOCKED"
 
     def reset(self, _event) -> None:
         self.frame_index = 0
         self.true_history.clear()
         self.estimated_history.clear()
         self.error_history.clear()
+        self.manual_offset_xy.fill(0.0)
+        self.forced_hot_pixel_xy = None
         self._build_simulator_and_trajectory()
         self.status_text.set_text("Reset")
         self.figure.canvas.draw_idle()

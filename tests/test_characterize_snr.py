@@ -33,6 +33,9 @@ def test_summarize_errors_reports_failures_and_outliers() -> None:
     assert summary.lock_failure_count == 2
     assert summary.lock_failure_rate == 0.5
     assert np.isfinite(summary.conditional_radial_rmse_px)
+    assert np.isfinite(summary.radial_rmse_stderr_px)
+    assert np.isfinite(summary.failure_rate_stderr)
+    assert np.isfinite(summary.lock_failure_rate_stderr)
     assert summary.rmse_x_px > 0.0
 
 

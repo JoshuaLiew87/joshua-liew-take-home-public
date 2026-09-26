@@ -41,6 +41,11 @@ The submission will deliberately distinguish a clean theoretical reference from 
 
 All tunable values should be held in structured configuration objects rather than scattered through experiment scripts. The configuration should be divided into independent sections:
 
+The dataclasses in `config.py` remain the source of truth and validation
+schema. Optional YAML files under `configs/` act only as strict overrides for
+`run_all.py`; omitted values inherit the named profile defaults, and unknown
+sections or fields are rejected.
+
 - `SensorConfig`: frame dimensions, exposure time, bit depth, conversion gain, full-well capacity, ADC range, and read noise.
 - `SpotConfig`: total spot flux, nominal sigma, sigma variation, and allowed position margin.
 - `BackgroundConfig`: offset, gradient/plane coefficients, and temporal variation.
@@ -130,6 +135,11 @@ transcelestial-spot-localization/
     ├── report.md
     └── decisions.md
 ```
+
+The final `run_all.py` workflow stores each execution under
+`results/runs/<UTC timestamp>/`, with separate `results/` and `figures/`
+subdirectories plus a manifest. It refreshes `results/latest/` with the most
+recent run so report links remain stable without discarding run history.
 
 The optional parabolic estimator is intentionally excluded from the initial implementation. It can be added only if the baseline is complete and it contributes meaningfully to the real-time tradeoff.
 
@@ -476,6 +486,16 @@ For each condition, classify the dominant effect as bias, increased variance, ou
 
 No full robustness implementation is required for this section. A simple scintillation extension may be added only after the baseline is complete; it would modulate spot flux over time while preserving the distinction between intensity fluctuation and beam wander.
 
+Phase 6 implementation checkpoint: `experiments/real_world_conditions.py`
+quantifies controlled scintillation, bright-background, defocus, and saturation
+cases for both estimators using paired Monte Carlo trials. The report contains
+the measured results, the required outdoor-condition table, detection signals,
+mitigations, assumptions, and limitations. Effects such as beam wander,
+motion blur, blooming, lens distortion, rolling shutter, and end-to-end
+latency are addressed analytically because a full implementation of each is
+outside the one-week scope. Phase 6 is complete, and the final
+`run_all.py` reproducibility workflow is now implemented and verified.
+
 ## 13. Post-core live GUI phase
 
 This phase is intentionally scheduled after the simulator, estimator,
@@ -494,6 +514,9 @@ estimators, and shared trajectory generator. The live display should provide:
 - current image, true and estimated positions, trajectory history, and
   position error;
 - pause/reset controls and an explicit lock/failure status.
+- keyboard review shortcuts: arrow-key 0.1-pixel manual nudges, low/high-flux
+  presets, background-gradient toggle, and a controlled persistent ROI-edge
+  hot pixel; Matplotlib's default keyboard shortcuts are disabled;
 
 The GUI display timer may run below 1 kHz so the visualization remains usable.
 It must label itself as a demonstration and must not be used as the evidence
@@ -658,7 +681,7 @@ Checkpoint: the complete baseline experiment runs end-to-end from a clean output
 - Complete the assumption register and assignment traceability matrix.
 - Only if the baseline is stable, add the latency-budget extension.
 
-Checkpoint: a reviewer can reproduce the results and understand why they look the way they do.
+Checkpoint: a reviewer can reproduce the results and understand why they look the way they do. Complete; the final integration is handled by `run_all.py`.
 
 ### Day 7 — Final audit and live-review preparation
 
@@ -673,6 +696,12 @@ Checkpoint: a reviewer can reproduce the results and understand why they look th
 - Freeze the final scenario and record the final environment details.
 - After the core audit is complete, run the post-core live GUI as an optional
   review demonstration; do not let GUI work replace missing required results.
+
+Final integration checkpoint: `run_all.py` has been run with the production
+settings from a clean staging directory and from the repository. It generated
+24 declared result/figure files plus a manifest in both the timestamped run
+directory and `results/latest/`; the full test suite passes. Remaining work is
+review and submission preparation, not a new implementation phase.
 
 ## 18. Phase-gate rule
 

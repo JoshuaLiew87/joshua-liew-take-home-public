@@ -75,10 +75,14 @@
       "disturbance_frequency_hz": 73.0,
       "drift_amplitude_px": 1.5,
       "drift_frequency_hz": 0.4,
+      "drift_model": "sinusoidal",
       "final_frame_count": 5000,
       "frame_rate_hz": 1000.0,
       "jitter_correlation": 0.95,
-      "jitter_rms_px": 0.04
+      "jitter_rms_px": 0.04,
+      "ou_bound_px": 2.0,
+      "ou_correlation_time_s": 0.25,
+      "ou_drift_rms_px": 0.6
     }
   },
   "frame_interval_ms": 1.0,
@@ -97,17 +101,17 @@
       "failure_rate": 0.0,
       "frame_count": 200,
       "initialization": "cold",
-      "mean_ms": 0.05493443,
-      "median_ms": 0.05375,
+      "mean_ms": 0.054312085,
+      "median_ms": 0.053167,
       "median_nfev": NaN,
-      "p95_ms": 0.06005864999999999,
+      "p95_ms": 0.06081279999999999,
       "p95_nfev": NaN,
-      "p99_ms": 0.06302041999999998,
+      "p99_ms": 0.06333324999999997,
       "profile": "ideal",
       "success_count": 200,
       "target_snr": 10.0,
       "warmup_count": 20,
-      "worst_ms": 0.095666
+      "worst_ms": 0.068125
     },
     {
       "deadline_miss_count": 200,
@@ -117,17 +121,17 @@
       "failure_rate": 0.0,
       "frame_count": 200,
       "initialization": "cold",
-      "mean_ms": 1.8425264399999997,
-      "median_ms": 1.88025,
+      "mean_ms": 1.79669002,
+      "median_ms": 1.832062,
       "median_nfev": 4.0,
-      "p95_ms": 2.0974732499999997,
+      "p95_ms": 2.1034393,
       "p95_nfev": 4.0,
-      "p99_ms": 2.2769607400000003,
+      "p99_ms": 2.24815783,
       "profile": "ideal",
       "success_count": 200,
       "target_snr": 10.0,
       "warmup_count": 20,
-      "worst_ms": 2.385375
+      "worst_ms": 2.480167
     },
     {
       "deadline_miss_count": 200,
@@ -137,17 +141,17 @@
       "failure_rate": 0.0,
       "frame_count": 200,
       "initialization": "warm",
-      "mean_ms": 2.1982874900000002,
-      "median_ms": 1.9797289999999998,
+      "mean_ms": 2.133490025,
+      "median_ms": 1.948021,
       "median_nfev": 4.0,
-      "p95_ms": 2.7508243499999954,
+      "p95_ms": 2.8455809499999996,
       "p95_nfev": 4.0,
-      "p99_ms": 6.864879249999998,
+      "p99_ms": 5.684564409999993,
       "profile": "ideal",
       "success_count": 200,
       "target_snr": 10.0,
       "warmup_count": 20,
-      "worst_ms": 7.840708
+      "worst_ms": 7.789416
     }
   ]
 }

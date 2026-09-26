@@ -1,0 +1,28 @@
+# User-facing overrides for the final review run.
+# Omitted fields inherit from config.py and the named scenario profiles.
+
+pipeline:
+  target_snr: 10.0
+  static_trials: 1000
+  roi_trials: 200
+  runtime_frames: 200
+  runtime_warmup: 20
+  dynamic_frames: 5000
+  real_world_trials: 300
+
+profiles:
+  sensor:
+    estimator:
+      centroid_roi_size_px: 13
+      gaussian_roi_size_px: 15
+  dynamic:
+    trajectory:
+      drift_model: ou
+      ou_drift_rms_px: 0.6
+      ou_correlation_time_s: 0.25
+      ou_bound_px: 2.0
+      jitter_rms_px: 0.04
+      jitter_correlation: 0.95
+      disturbance_frequency_hz: 73.0
+      disturbance_amplitude_px: 0.05
+      disturbance_axis: x

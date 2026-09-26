@@ -40,6 +40,7 @@ class MetricSummary:
     rmse_x_px: float
     rmse_y_px: float
     radial_rmse_px: float
+    radial_rmse_stderr_px: float
     median_radial_error_px: float
     p95_radial_error_px: float
     covariance_xy_px2: float
@@ -47,6 +48,8 @@ class MetricSummary:
     locked_count: int
     lock_failure_count: int
     lock_failure_rate: float
+    failure_rate_stderr: float
+    lock_failure_rate_stderr: float
     conditional_bias_x_px: float
     conditional_bias_y_px: float
     conditional_std_x_px: float
@@ -104,6 +107,15 @@ def summarize_errors(
         rmse_x = float(np.sqrt(np.mean(valid_errors[:, 0] ** 2)))
         rmse_y = float(np.sqrt(np.mean(valid_errors[:, 1] ** 2)))
         radial_rmse = float(np.sqrt(np.mean(radial_errors**2)))
+        squared_radial_errors = radial_errors**2
+        radial_rmse_stderr = (
+            float(
+                np.std(squared_radial_errors, ddof=1)
+                / (2.0 * np.sqrt(success_count) * radial_rmse)
+            )
+            if success_count > 1 and radial_rmse > 0
+            else 0.0
+        )
         median_radial = float(np.median(radial_errors))
         p95_radial = float(np.percentile(radial_errors, 95.0))
         if success_count > 1:
@@ -117,7 +129,7 @@ def summarize_errors(
     else:
         bias_x = bias_y = bias_x_stderr = bias_y_stderr = float("nan")
         std_x = std_y = std_x_stderr = std_y_stderr = float("nan")
-        rmse_x = rmse_y = radial_rmse = median_radial = p95_radial = float("nan")
+        rmse_x = rmse_y = radial_rmse = radial_rmse_stderr = median_radial = p95_radial = float("nan")
         covariance_xy = correlation_xy = float("nan")
 
     if locked_count:
@@ -153,6 +165,7 @@ def summarize_errors(
         rmse_x_px=rmse_x,
         rmse_y_px=rmse_y,
         radial_rmse_px=radial_rmse,
+        radial_rmse_stderr_px=radial_rmse_stderr,
         median_radial_error_px=median_radial,
         p95_radial_error_px=p95_radial,
         covariance_xy_px2=covariance_xy,
@@ -160,6 +173,16 @@ def summarize_errors(
         locked_count=locked_count,
         lock_failure_count=lock_failure_count,
         lock_failure_rate=float(lock_failure_count / trial_count),
+        failure_rate_stderr=float(
+            np.sqrt((failure_count / trial_count) * (1.0 - failure_count / trial_count) / trial_count)
+        ),
+        lock_failure_rate_stderr=float(
+            np.sqrt(
+                (lock_failure_count / trial_count)
+                * (1.0 - lock_failure_count / trial_count)
+                / trial_count
+            )
+        ),
         conditional_bias_x_px=conditional_bias_x,
         conditional_bias_y_px=conditional_bias_y,
         conditional_std_x_px=conditional_std_x,
@@ -332,7 +355,12 @@ def plot_sweep(
             "standard deviation [pixel]",
             "Position precision",
         ),
-        (axes[1, 0], (("radial_rmse_px", None, "radial"),), "radial RMSE [pixel]", "Radial RMSE"),
+        (
+            axes[1, 0],
+            (("radial_rmse_px", "radial_rmse_stderr_px", "radial"),),
+            "radial RMSE [pixel]",
+            "Radial RMSE",
+        ),
     )
     for estimator, estimator_summaries in by_estimator.items():
         if not estimator_summaries:
@@ -389,18 +417,20 @@ def plot_sweep(
         snrs = np.asarray([item.requested_snr for item in estimator_summaries])
         color = colors[estimator]
         label = labels[estimator]
-        failure_axis.plot(
+        failure_axis.errorbar(
             snrs,
             [item.failure_rate for item in estimator_summaries],
-            marker="o",
+            yerr=[item.failure_rate_stderr for item in estimator_summaries],
+            fmt="o",
             linestyle=":",
             color=color,
             label=f"{label} invalid",
         )
-        failure_axis.plot(
+        failure_axis.errorbar(
             snrs,
             [item.lock_failure_rate for item in estimator_summaries],
-            marker="s",
+            yerr=[item.lock_failure_rate_stderr for item in estimator_summaries],
+            fmt="s",
             linestyle="-",
             color=color,
             label=f"{label} lock loss",
