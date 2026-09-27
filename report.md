@@ -395,9 +395,8 @@ The centroid is comfortably below the nominal 1 ms estimator budget in this
 Python benchmark. The Gaussian fit is more accurate in many clean and
 stressed regimes, but its Python implementation does not meet a 1 kHz budget
 on this machine. Warm-starting reduced the median stressed latency slightly
-but did not meet the budget. The tail is sensitive to machine load, with the
-latest stressed warm-start p99 reaching 5.87 ms, so it is not treated as a
-guaranteed optimization.
+but did not meet the budget. The tail is sensitive to machine load, so these
+measurements are not treated as a deterministic real-time guarantee.
 
 These measurements exclude camera transfer, image acquisition,
 preprocessing, synchronization, filtering, and gimbal output. They are a
@@ -460,7 +459,7 @@ TensorRT were visible on the device but were not used by the code.
 | Estimator | Mac median [ms] | Jetson median [ms] | Jetson p99 [ms] | Jetson >1 ms |
 |---|---:|---:|---:|---:|
 | Centroid, cold | 0.055 | 0.485 | 0.544 | 0% |
-| Gaussian, warm | 1.819 | 10.482 | 13.458 | 100% |
+| Gaussian, warm | 1.819 | 10.482 | 13.459 | 100% |
 
 The seeded static and dynamic metrics matched the Mac reference to floating-
 point precision, including the SNR-10 RMSE values and 73 Hz disturbance
@@ -814,35 +813,33 @@ rather than as a quantitative result.*
 
 \endgroup
 
-## 13. Current limitations and next steps
+## 13. Conclusion and future work
 
-The static characterization, Python runtime benchmark, dynamic tracking, and
-Jetson target-validation phases are complete.
-The characterization provides the quantitative evidence needed to compare
-estimators, select ROI settings, identify SNR regimes, expose lock-loss modes,
-and compare clean empirical precision with a Fisher-information reference.
-The real-world conditions analysis and one-command reproduction workflow are
-complete. The workflow has been run with the production settings and its
-manifest confirms that all declared result and figure files were generated.
+This work developed and evaluated a configurable sub-pixel spot-localization
+pipeline using a pixel-integrated Gaussian sensor model, a windowed intensity
+centroid, and a pixel-integrated Gaussian fit. At SNR 10 in the stressed
+sensor profile, the radial RMSE was 0.161 pixels for the centroid and 0.081
+pixels for the Gaussian fit. At SNR 1, lock-loss rates were 96.5% and 90.1%,
+respectively, demonstrating that improved conditional accuracy does not imply
+reliable localization once the signal becomes unobservable. The ideal-model
+Fisher reference at SNR 10 was 0.0564 pixels.
 
-The live GUI may be used during the review to illustrate behavior under
-different conditions, but conclusions will be based on reproducible saved
-experiments rather than interactive screenshots.
+The dynamic 5,000-frame experiment produced RMS trajectory errors of 0.1636
+pixels for the centroid and 0.0817 pixels for the Gaussian fit. The injected
+73 Hz disturbance was recovered at 72.9934 Hz and 72.9974 Hz, with amplitudes
+of 0.0563 and 0.0565 pixels against the injected 0.05-pixel value. The
+centroid latency was 0.055 ms on the Mac reference system and 0.485 ms on the
+Jetson Orin, while the full Gaussian fit required 1.819 ms and 10.482 ms,
+respectively. These results support using the centroid as the low-latency
+tracking estimator and reserving the Gaussian fit for slower supervisory
+processing or a compiled embedded implementation.
 
-The full photon-to-position-to-gimbal latency budget was not implemented in
-this simulator-only study. Effort was deliberately allocated to the
-controlled outdoor-condition analysis, sequential estimator timing, dynamic
-disturbance recovery, and the optional live GUI. The report therefore treats
-end-to-end latency as an explicit scope limitation rather than implying that
-the estimator-only benchmark covers the complete control loop.
-
-With more time, the next technical steps would be to derive a Fisher
-reference for the quantized and clipped likelihood; replace the GUI-only
-exposure/gain demonstration with a calibrated hardware-facing controller;
-add a physically separate beam-wander process; model motion blur and
-rolling-shutter timing; and validate the noise model against camera
-calibration frames. The Jetson result motivates a compiled or vectorized
-Gaussian implementation and a hardware-in-the-loop test to measure the
-currently unmeasured camera-to-gimbal latency budget, including exposure,
-readout, transfer, filtering, and actuation. These are deliberate extensions
-rather than required gaps in the submitted simulator study.
+The study provides a reproducible baseline through the saved experiment
+outputs, tests, report figures, and one-command workflow. The runtime results
+are estimator-only measurements; the complete photon-to-actuator latency,
+including exposure, readout, transfer, filtering, and gimbal actuation, was
+not measured. Future work should validate the noise model against camera
+calibration data, derive a precision reference for quantized and clipped
+likelihoods, model motion blur and rolling-shutter timing, and evaluate a
+compiled Gaussian implementation with hardware-in-the-loop measurement of the
+full control-path latency.
