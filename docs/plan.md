@@ -547,6 +547,8 @@ estimators, and shared trajectory generator. The live display should provide:
 - drift, jitter, periodic-disturbance amplitude, and frequency controls;
 - current image, true and estimated positions, trajectory history, and
   position error;
+- a day/night scene-brightness sweep with separate beacon and ambient-light
+  scaling, plus an optional bounded automatic exposure/gain response;
 - pause/reset controls and an explicit lock/failure status.
 - keyboard review shortcuts: arrow-key 0.1-pixel manual nudges, low/high-flux
   presets, background-gradient toggle, and a controlled persistent ROI-edge
@@ -558,6 +560,10 @@ for the 1 kHz requirement; the dedicated runtime benchmark owns that claim.
 The live trajectory uses the same drift, correlated-jitter, and one-frequency
 disturbance model as the later dynamic experiment so the demonstration stays
 consistent with the report.
+
+The illumination sweep is explicitly a GUI-only qualitative extension. It
+displays effective SNR, exposure, gain, saturation count, and lock status, but
+does not alter the authoritative Monte Carlo, runtime, or dynamic results.
 
 Checkpoint: the GUI can run a moving spot, toggle configured effects, switch
 estimators, and show true-versus-estimated behavior without introducing a

@@ -44,7 +44,7 @@ Run the tests with:
 python -m pytest -q
 ```
 
-The current suite contains 43 tests.
+The current suite contains 44 tests.
 
 ## Design and implementation summary
 
@@ -62,7 +62,8 @@ The current suite contains 43 tests.
 - Dynamic drift, correlated jitter, and periodic-disturbance recovery.
 - Multi-seed disturbance-amplitude repeatability analysis.
 - Controlled outdoor-condition stress analysis.
-- Optional live GUI using the same simulator and estimators.
+- Optional live GUI using the same simulator and estimators, including a
+  day/night illumination sweep with bounded automatic exposure/gain control.
 
 The centroid is the low-latency baseline. The Gaussian fit is generally more
 accurate when the spot is observable, but is more computationally expensive
@@ -144,6 +145,12 @@ The GUI shows the simulated sensor frame, true and estimated positions,
 trajectory history, and position error. It provides controls for SNR, motion,
 noise effects, sensor effects, and estimator selection.
 
+The `Scene brightness` control sweeps from a low-background night scene through
+the nominal midpoint to a bright daytime scene. Enabling `Auto exposure/gain`
+lets the GUI respond to saturation and underexposure using bounded, hysteretic
+updates. The status panel displays the scene level, effective SNR, exposure,
+gain, saturation count, and lock status.
+
 With the figure focused:
 
 - Arrow keys: nudge the true position by 0.1 pixel.
@@ -161,8 +168,21 @@ results.
 ![Animated live simulator demonstration](docs/figures/live_demo.gif)
 
 The animation uses the same production simulator and estimators as the batch
-experiments. It is provided for an interactive review demonstration; the saved
-figures and numerical outputs remain the authoritative results.
+experiments. It also demonstrates the optional GUI-only illumination sweep and
+automatic exposure/gain response. This is a qualitative review demonstration,
+not a hardware-camera exposure controller or a replacement for the saved
+quantitative results.
+
+To generate the animated review asset locally:
+
+```bash
+python -m experiments.live_gui \
+  --profile sensor \
+  --snr 10 \
+  --save-gif docs/figures/live_demo.gif \
+  --scene-sweep \
+  --auto-exposure
+```
 
 ## Output locations
 

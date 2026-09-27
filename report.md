@@ -16,7 +16,7 @@ fit. The current implementation also includes a reproducible trajectory
 generator, a static Monte Carlo characterization runner, and an optional live
 visualization. At this checkpoint, the simulator, estimators, static
 characterization, runtime benchmark, and dynamic recovery analysis have been
-verified by 43 automated tests. The final `run_all.py` reproduction workflow
+verified by 44 automated tests. The final `run_all.py` reproduction workflow
 and real-world conditions analysis are complete. Runtime results
 are treated as a Python development baseline rather than a flight-hardware
 guarantee.
@@ -191,7 +191,7 @@ quasi-MLE, rather than an exact likelihood for clipped and quantized data.
 
 ## 4. Verification of the current implementation
 
-The current test suite contains 43 tests. The tests are deterministic and
+The current test suite contains 44 tests. The tests are deterministic and
 use statistical tolerances where random sampling is involved. They cover:
 
 - pixel-integrated PSF flux conservation and symmetry;
@@ -634,7 +634,7 @@ calibrations for this exercise, not measurements of a deployed camera.
 | A-025 | Static SNR sweeps reuse trial positions and fixed-pattern maps across SNR values, and both estimators process the same rendered frames | — | Reduces avoidable Monte Carlo comparison variance | Makes estimator comparisons more paired and reproducible | Final ideal and stressed sweeps |
 | A-026 | Gaussian IRLS uses a configurable 1 DN² lower bound on approximate Poisson/read-noise variance | DN² | Prevents extreme weights from tiny or negative fitted tail-background values | Changes approximate fit weighting in low-signal tails | Final sweeps; likelihood remains approximate |
 | A-027 | Runtime frames are generated before timing; 20 warm-up calls are excluded; centroid cold and Gaussian cold/warm paths are timed against a 1 ms interval | ms, frames | Separates estimator execution from simulation and initialization overhead | Determines reported latency and deadline-miss rates | 200-frame ideal and stressed benchmark |
-| A-028 | The final dynamic record uses 5,000 frames at 1 kHz, 0.04-pixel correlated jitter, a 73 Hz/0.05-pixel x-axis disturbance, Hann-windowed spectral analysis, and a 20 Hz lower search limit | frames, Hz, pixels | Provides frequency resolution while separating slow OU drift from the intentional disturbance | Analysis results depend on windowing, search band, and finite-record noise | Dynamic recovery output and 43-test suite |
+| A-028 | The final dynamic record uses 5,000 frames at 1 kHz, 0.04-pixel correlated jitter, a 73 Hz/0.05-pixel x-axis disturbance, Hann-windowed spectral analysis, and a 20 Hz lower search limit | frames, Hz, pixels | Provides frequency resolution while separating slow OU drift from the intentional disturbance | Analysis results depend on windowing, search band, and finite-record noise | Dynamic recovery output and 44-test suite |
 | A-029 | Phase 6 controlled stress cases use 300 paired trials at reference SNR 10, a 1-pixel lock-loss threshold, and fixed nominal photon flux for background/defocus comparisons | frames, dimensionless, pixels | Makes outdoor-condition effects measurable without silently restoring baseline SNR | Results are finite-sample engineering evidence, not field validation | Real-world CSV/JSON outputs and reproducibility test |
 | A-030 | Scintillation is a mean-one correlated log-normal flux multiplier with log-intensity RMS 0.5 and lag-one correlation 0.95 | dimensionless | Captures temporal intensity modulation while preserving the distinction between flux variation and beam wander | Changes effective SNR and can create intermittent lock loss | Controlled Phase 6 experiment; atmospheric statistics are not measured |
 | A-031 | The controlled outdoor study uses PSF sigma 2.4 pixels for defocus, a 200-electron/pixel bright background with 1.5/-1.0 electron/pixel gradients, and 100x nominal flux for saturation | pixels, electrons, electrons/pixel, multiplier | Provides interpretable stress levels within the existing sensor model | Quantifies sensitivity to width, background, and clipping; does not model blooming or optical halos | Saved condition metadata and figure |
@@ -644,6 +644,7 @@ calibrations for this exercise, not measurements of a deployed camera.
 | A-035 | The ranking ablation uses 250 paired trials at SNR 1 and 3 for five conditions: ideal, background gradient, PRNU/hot pixels, quantization/saturation, and full stressed | trials, dimensionless | Separates low-SNR convergence effects from contamination and clipping effects | Provides evidence for the clean/stressed ranking reversal | Ablation outputs and Figure 2 |
 | A-036 | Dynamic amplitude repeat uses five independent master seeds and 2,500 frames per seed at target SNR 10 | seeds, frames, dimensionless | Quantifies finite-record amplitude variation without replacing the primary 5,000-frame result | Gives uncertainty on the apparent amplitude bias; short records can weaken frequency recovery | Repeat outputs and Figure 6 |
 | A-037 | Sensor-chain validation includes a non-unity 2-electron/DN conversion-gain case | electrons/DN | Ensures the nominal 1-electron/DN choice does not mask unit-ordering errors | Separates charge-domain clipping from DN conversion | ADC conversion-gain test |
+| A-038 | GUI-only scene sweep uses independent beacon/background scaling with bounded exposure and simplified analog-gain response | dimensionless, ms, gain | Demonstrates the optional day/night exposure concept without changing authoritative experiments | Shows saturation recovery and low-light response qualitatively | Headless GUI test; interactive review only |
 
 \endgroup
 
@@ -720,10 +721,20 @@ The hot-pixel case is a controlled GUI intervention rather than a change to
 the production sensor model, and is used to discuss estimator sensitivity
 rather than claim automatic rejection by the Gaussian fit.
 
+The GUI also includes a separate scene-brightness control spanning a nominal
+night-to-day illumination sweep. Beacon flux and ambient background are varied
+independently; the midpoint is the nominal sensor scenario. An optional
+automatic exposure/gain mode responds to saturated or underexposed frames with
+bounded, hysteretic updates and reports the current exposure, gain, effective
+SNR, saturation count, and lock status. This is a qualitative review feature,
+not a calibrated camera-control implementation, and it does not modify the
+authoritative Monte Carlo, runtime, or dynamic results.
+
 ![Animated live simulator demonstration](docs/figures/live_demo.gif)
 
 *Figure 9. Live simulator demonstration using the production simulator and
-estimators. The Markdown report displays the animation; PDF export uses its
+estimators, including the optional illumination sweep and exposure/gain
+response. The Markdown report displays the animation; PDF export uses its
 first-frame PNG because PDF does not provide animation. The display is
 intentionally slower than the 1 kHz benchmark and is included as a review aid
 rather than as a quantitative result.*
@@ -756,6 +767,7 @@ rather than as a quantitative result.*
 | Written report | This document | Complete through final integration; runtime caveat documented |
 | Reproducible dynamic scenario and analysis | Section 8; dynamic outputs and repeat outputs | Complete |
 | Optional live interactive demonstration | Section 11; live GUI module | Implemented |
+| Optional automatic exposure/gain demonstration | Section 11; live GUI scene sweep and exposure controller | Implemented as a qualitative GUI-only extension; not hardware validated |
 
 \endgroup
 
@@ -782,10 +794,11 @@ end-to-end latency as an explicit scope limitation rather than implying that
 the estimator-only benchmark covers the complete control loop.
 
 With more time, the next technical steps would be to derive a Fisher
-reference for the quantized and clipped likelihood; add a physically
-separate beam-wander process; model motion blur and rolling-shutter timing;
-add automatic exposure/gain control; and validate the noise model against
-camera calibration frames. A compiled or vectorized Gaussian implementation
+reference for the quantized and clipped likelihood; replace the GUI-only
+exposure/gain demonstration with a calibrated hardware-facing controller;
+add a physically separate beam-wander process; model motion blur and
+rolling-shutter timing; and validate the noise model against camera
+calibration frames. A compiled or vectorized Gaussian implementation
 should be benchmarked on the Jetson Orin or a representative FPGA/embedded
 target. A hardware-in-the-loop test would measure the currently unmeasured
 camera-to-gimbal latency budget, including exposure, readout, transfer,

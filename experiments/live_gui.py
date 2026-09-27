@@ -20,7 +20,7 @@ from common.rng import make_rng_streams
 from config import ScenarioConfig, scenario_config
 from estimators.centroid import estimate_centroid
 from estimators.gaussian_fit import estimate_gaussian
-from sim.simulator import SpotSimulator
+from sim.simulator import SpotSimulator, total_flux_for_target_snr
 from sim.trajectory import TrajectoryGenerator
 
 
@@ -49,6 +49,9 @@ class LiveLocalizationDemo:
     ) -> None:
         config.validate()
         self.config = config
+        self._base_config = config
+        self._base_sensor = config.sensor
+        self._base_background = config.background
         self.snr = float(config.experiment.target_snr if snr is None else snr)
         self.estimator_name = estimator_name
         self.display_interval_ms = int(display_interval_ms)
@@ -62,6 +65,13 @@ class LiveLocalizationDemo:
         self.paused = False
         self.manual_step_px = 0.1
         self.manual_offset_xy = np.zeros(2, dtype=float)
+        self.scene_level = 0.5
+        self.auto_exposure_enabled = False
+        self.exposure_scale = 1.0
+        self.analog_gain = 1.0
+        self._exposure_scale_limits = (0.125, 4.0)
+        self._analog_gain_limits = (0.5, 8.0)
+        self._auto_target_peak_fraction = 0.65
         self._base_gradients = (
             float(config.background.gradient_x_e_per_px),
             float(config.background.gradient_y_e_per_px),
@@ -78,6 +88,7 @@ class LiveLocalizationDemo:
         self._timer.add_callback(self._update_frame)
 
     def _build_simulator_and_trajectory(self) -> None:
+        self._apply_runtime_config()
         streams = make_rng_streams(self.config.experiment.master_seed + self.frame_index)
         old_maps = getattr(self, "simulator", None)
         self.simulator = SpotSimulator(
@@ -149,30 +160,31 @@ class LiveLocalizationDemo:
                 valinit=value,
             )
 
-        self.snr_slider = make_slider(0.89, "SNR", 1.0, 1000.0, self.snr)
+        self.snr_slider = make_slider(0.91, "Reference SNR", 1.0, 1000.0, self.snr)
+        self.scene_slider = make_slider(0.86, "Scene brightness [%]", 0.0, 100.0, 50.0)
         self.drift_slider = make_slider(
-            0.84,
+            0.81,
             "Drift amplitude [px]",
             0.0,
             4.0,
             self.config.trajectory.drift_amplitude_px,
         )
         self.jitter_slider = make_slider(
-            0.79,
+            0.76,
             "Jitter RMS [px]",
             0.0,
             0.25,
             self.config.trajectory.jitter_rms_px,
         )
         self.disturbance_slider = make_slider(
-            0.74,
+            0.71,
             "Disturbance amplitude [px]",
             0.0,
             0.3,
             self.config.trajectory.disturbance_amplitude_px,
         )
         self.frequency_slider = make_slider(
-            0.69,
+            0.66,
             "Disturbance frequency [Hz]",
             1.0,
             200.0,
@@ -180,7 +192,7 @@ class LiveLocalizationDemo:
         )
 
         self.noise_checks = CheckButtons(
-            self.figure.add_axes([left, 0.23, width, 0.23]),
+            self.figure.add_axes([left, 0.18, width, 0.20]),
             self._noise_labels,
             [
                 self.config.noise.photon_shot_enabled,
@@ -193,6 +205,11 @@ class LiveLocalizationDemo:
                 self.config.sensor.saturation_enabled,
             ],
         )
+        self.exposure_check = CheckButtons(
+            self.figure.add_axes([left, 0.42, width, 0.055]),
+            ("Auto exposure/gain",),
+            (self.auto_exposure_enabled,),
+        )
         self.estimator_radio = RadioButtons(
             self.figure.add_axes([left, 0.10, width, 0.09]),
             ("Gaussian fit", "Centroid"),
@@ -200,7 +217,7 @@ class LiveLocalizationDemo:
         )
         self.reset_button = Button(self.figure.add_axes([left, 0.06, 0.10, 0.04]), "Reset")
         self.pause_button = Button(self.figure.add_axes([left + 0.115, 0.06, 0.10, 0.04]), "Pause")
-        self.status_text = self.figure.text(0.765, 0.655, "", va="top", fontsize="small")
+        self.status_text = self.figure.text(0.765, 0.595, "", va="top", fontsize="x-small")
         self.help_text = self.figure.text(
             0.765,
             0.008,
@@ -217,11 +234,13 @@ class LiveLocalizationDemo:
             self.figure.canvas.mpl_disconnect(default_key_handler_id)
         self.figure.canvas.mpl_connect("key_press_event", self._on_key_press)
         self.snr_slider.on_changed(self._on_motion_control)
+        self.scene_slider.on_changed(self._on_scene_control)
         self.drift_slider.on_changed(self._on_motion_control)
         self.jitter_slider.on_changed(self._on_motion_control)
         self.disturbance_slider.on_changed(self._on_motion_control)
         self.frequency_slider.on_changed(self._on_motion_control)
         self.noise_checks.on_clicked(self._on_noise_toggle)
+        self.exposure_check.on_clicked(self._on_exposure_toggle)
         self.estimator_radio.on_clicked(self._on_estimator_change)
         self.reset_button.on_clicked(self.reset)
         self.pause_button.on_clicked(self.toggle_pause)
@@ -285,6 +304,83 @@ class LiveLocalizationDemo:
         )
         self.config = replace(self.config, trajectory=trajectory)
         self.reset(None)
+
+    def _on_scene_control(self, value: float) -> None:
+        """Change the physical scene without changing the motion history."""
+
+        self.scene_level = float(value) / 100.0
+        self._apply_runtime_config()
+
+    def _on_exposure_toggle(self, _label: str) -> None:
+        self.auto_exposure_enabled = not self.auto_exposure_enabled
+
+    def _scene_multipliers(self) -> tuple[float, float]:
+        """Return beacon and ambient-light multipliers for the GUI scene.
+
+        The midpoint is the nominal scenario. The beacon spans roughly four
+        orders of magnitude across the control, while the ambient background
+        spans a smaller range. This deliberately represents a review-demo
+        illumination sweep, not a calibrated day/night radiometry model.
+        """
+
+        level = float(self.scene_slider.val) / 100.0 if hasattr(self, "scene_slider") else self.scene_level
+        beacon_multiplier = 10.0 ** (4.0 * (level - 0.5))
+        ambient_multiplier = 10.0 ** (1.2 * (level - 0.5))
+        return beacon_multiplier, ambient_multiplier
+
+    def _runtime_config(self) -> ScenarioConfig:
+        """Build the current GUI-only sensor state from nominal parameters."""
+
+        _, ambient_multiplier = self._scene_multipliers()
+        base_gradients = self._base_gradients if self.gradient_enabled else (0.0, 0.0)
+        background = replace(
+            self._base_background,
+            offset_e=self._base_background.offset_e * ambient_multiplier,
+            gradient_x_e_per_px=base_gradients[0] * ambient_multiplier,
+            gradient_y_e_per_px=base_gradients[1] * ambient_multiplier,
+        )
+        sensor = replace(
+            self._base_sensor,
+            exposure_s=self._base_sensor.exposure_s * self.exposure_scale,
+            electrons_per_dn=self._base_sensor.electrons_per_dn / self.analog_gain,
+        )
+        return replace(self.config, sensor=sensor, background=background)
+
+    def _apply_runtime_config(self) -> None:
+        """Apply GUI exposure, gain, and scene state to the simulator."""
+
+        self.config = self._runtime_config()
+        if hasattr(self, "simulator"):
+            self.simulator.config = self.config
+
+    def _update_auto_exposure(self, frame) -> None:
+        """Apply a bounded, hysteretic exposure/gain update for the next frame."""
+
+        if not self.auto_exposure_enabled or not self.config.sensor.saturation_enabled:
+            return
+        adc_max = self.config.sensor.adc_max_dn
+        observed_peak = float(np.nanmax(frame.image_dn))
+        saturated = frame.metadata.saturated_pixel_count > 0 or observed_peak >= (
+            self._auto_target_peak_fraction + 0.30
+        ) * adc_max
+        too_dim = observed_peak < (self._auto_target_peak_fraction - 0.50) * adc_max
+        changed = False
+        if saturated:
+            if self.exposure_scale > self._exposure_scale_limits[0] + 1e-9:
+                self.exposure_scale = max(self._exposure_scale_limits[0], self.exposure_scale * 0.70)
+                changed = True
+            elif self.analog_gain > self._analog_gain_limits[0] + 1e-9:
+                self.analog_gain = max(self._analog_gain_limits[0], self.analog_gain * 0.70)
+                changed = True
+        elif too_dim:
+            if self.analog_gain < self._analog_gain_limits[1] - 1e-9:
+                self.analog_gain = min(self._analog_gain_limits[1], self.analog_gain * 1.35)
+                changed = True
+            elif self.exposure_scale < self._exposure_scale_limits[1] - 1e-9:
+                self.exposure_scale = min(self._exposure_scale_limits[1], self.exposure_scale * 1.35)
+                changed = True
+        if changed:
+            self._apply_runtime_config()
 
     def _position_with_manual_offset(self, position: tuple[float, float]) -> tuple[float, float]:
         margin = self.config.spot.position_margin_px
@@ -354,9 +450,16 @@ class LiveLocalizationDemo:
         result = None
         for _ in range(self.sensor_frames_per_update):
             true_position = self._position_with_manual_offset(self.trajectory.next_position())
+            beacon_multiplier, _ = self._scene_multipliers()
+            nominal_flux = total_flux_for_target_snr(
+                self._base_config,
+                self.simulator.maps,
+                float(self.snr_slider.val),
+                sigma_px=self._base_config.spot.sigma_px,
+            )
             frame = self.simulator.render(
                 true_position,
-                target_snr=float(self.snr_slider.val),
+                total_flux_e=nominal_flux * beacon_multiplier * self.exposure_scale,
             )
             image_dn = self._inject_demo_hot_pixel(frame.image_dn, true_position)
             if self.estimator_name == "Centroid":
@@ -373,6 +476,7 @@ class LiveLocalizationDemo:
             else:
                 self.estimated_history.append((np.nan, np.nan))
                 self.error_history.append(np.nan)
+            self._update_auto_exposure(frame)
         assert frame is not None and result is not None
         self.frame_index = self.trajectory.frame_index
         self.true_history = self.true_history[-self.history_length :]
@@ -402,17 +506,16 @@ class LiveLocalizationDemo:
             axis.relim()
             axis.autoscale_view()
         self.status_text.set_text(
-            f"frame: {self.frame_index}\n"
-            f"SNR: {self.snr_slider.val:.1f} (ref {frame.metadata.reference_snr:.2f})\n"
-            f"target: ({true_position[0]:.2f}, {true_position[1]:.2f}) px | "
-            f"phase: ({true_position[0] % 1.0:.2f}, {true_position[1] % 1.0:.2f})\n"
-            f"{self.estimator_name} | {self._lock_status(result, self.error_history[-1])}\n"
-            f"radial error: {self.error_history[-1]:.2f} px\n"
-            f"gradient: {'ON' if self.gradient_enabled else 'OFF'} | "
-            f"hot pixel: {'ON' if self.hot_pixel_demo_enabled else 'OFF'}\n"
-            f"saturated pixels: {int(np.count_nonzero(image_dn >= self.config.sensor.adc_max_dn)) if self.config.sensor.saturation_enabled else 0}\n"
-            f"display: {self.display_interval_ms} ms | sim: {self.sensor_frames_per_update} frames/update\n"
-            "display only; not the 1 kHz benchmark"
+            f"frame {self.frame_index} | SNR {self.snr_slider.val:.1f} | eff {frame.metadata.effective_snr:.2f}\n"
+            f"scene {self.scene_slider.val:.0f}% | beacon x{self._scene_multipliers()[0]:.2f} | "
+            f"{'AUTO' if self.auto_exposure_enabled else 'FIXED'}\n"
+            f"exp {self.config.sensor.exposure_s * 1e3:.3f} ms | gain {self.analog_gain:.2f}x\n"
+            f"{self.estimator_name} | {self._lock_status(result, self.error_history[-1])} | "
+            f"err {self.error_history[-1]:.2f} px\n"
+            f"gradient {'ON' if self.gradient_enabled else 'OFF'} | "
+            f"hot {'ON' if self.hot_pixel_demo_enabled else 'OFF'} | "
+            f"sat {int(np.count_nonzero(image_dn >= self.config.sensor.adc_max_dn)) if self.config.sensor.saturation_enabled else 0}\n"
+            f"display {self.display_interval_ms} ms | display-only"
         )
         self.figure.canvas.draw_idle()
 
@@ -432,6 +535,8 @@ class LiveLocalizationDemo:
         self.error_history.clear()
         self.manual_offset_xy.fill(0.0)
         self.forced_hot_pixel_xy = None
+        self.exposure_scale = 1.0
+        self.analog_gain = 1.0
         self._build_simulator_and_trajectory()
         self.status_text.set_text("Reset")
         self.figure.canvas.draw_idle()
@@ -454,12 +559,16 @@ def save_demo_gif(
     frame_count: int = 24,
     fps: int = 8,
     dpi: int = 80,
+    auto_exposure: bool = False,
+    scene_sweep: bool = False,
 ) -> Path:
     """Render a short animated review clip from the live-demo figure.
 
     The animation uses the same simulator, trajectory generator, controls,
     and estimator as the interactive GUI. It is intended for Markdown/README
-    previews; PDF export uses the first-frame PNG fallback.
+    previews; PDF export uses the first-frame PNG fallback. ``scene_sweep``
+    creates a triangular night-to-day-to-night illumination transition, and
+    ``auto_exposure`` enables the optional GUI-only exposure/gain controller.
     """
 
     from matplotlib.animation import FuncAnimation, PillowWriter
@@ -475,8 +584,14 @@ def save_demo_gif(
         display_interval_ms=50,
     )
     demo.figure.set_facecolor("white")
+    if auto_exposure:
+        demo.exposure_check.set_active(0)
 
-    def update(_frame: int) -> tuple[()]:
+    def update(frame_index: int) -> tuple[()]:
+        if scene_sweep:
+            phase = frame_index / max(frame_count - 1, 1)
+            triangle = 2.0 * phase if phase <= 0.5 else 2.0 * (1.0 - phase)
+            demo.scene_slider.set_val(100.0 * triangle)
         demo._update_frame()
         return ()
 
@@ -501,6 +616,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save-gif", type=Path, default=None)
     parser.add_argument("--gif-frames", type=int, default=24)
     parser.add_argument("--gif-fps", type=int, default=8)
+    parser.add_argument("--auto-exposure", action="store_true")
+    parser.add_argument("--scene-sweep", action="store_true")
     return parser.parse_args()
 
 
@@ -516,6 +633,8 @@ def main() -> None:
             estimator_name=estimator_name,
             frame_count=args.gif_frames,
             fps=args.gif_fps,
+            auto_exposure=args.auto_exposure,
+            scene_sweep=args.scene_sweep,
         )
         print(f"Saved live-demo GIF to {args.save_gif}")
     else:

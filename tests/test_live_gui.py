@@ -63,3 +63,25 @@ def test_live_gui_q_shortcut_closes_the_figure() -> None:
     demo = LiveLocalizationDemo(scenario_config("sensor"), snr=10.0)
     demo._on_key_press(SimpleNamespace(key="q"))
     assert not plt.fignum_exists(demo.figure.number)
+
+
+def test_live_gui_scene_sweep_and_auto_exposure_are_display_controls() -> None:
+    demo = LiveLocalizationDemo(
+        scenario_config("sensor"),
+        snr=10.0,
+        display_interval_ms=50,
+    )
+    try:
+        nominal_background = demo._base_background.offset_e
+        demo.scene_slider.set_val(100.0)
+        assert demo.config.background.offset_e > nominal_background
+
+        demo.exposure_check.set_active(0)
+        assert demo.auto_exposure_enabled
+        for _ in range(4):
+            demo._update_frame()
+
+        assert demo.exposure_scale < 1.0
+        assert demo.config.sensor.exposure_s < demo._base_sensor.exposure_s
+    finally:
+        plt.close(demo.figure)

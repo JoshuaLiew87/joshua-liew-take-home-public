@@ -39,6 +39,7 @@
 - **A-035 — Ranking-reversal ablation:** run 250 paired trials at SNR 1 and 3 for ideal, background-gradient, PRNU/hot-pixel, quantization/saturation, and full-stressed conditions. This isolates whether the observed estimator reversal is caused by background modeling, outliers, clipping, or low-SNR convergence.
 - **A-036 — Dynamic amplitude repeat:** run five independent master seeds with 2,500 frames per seed at target SNR 10. Use this as a repeatability study for amplitude bias; retain the 5,000-frame run as the primary frequency-recovery result.
 - **A-037 — Conversion-gain validation:** explicitly test a 2-electron/DN case with separate full-well and ADC limits. The nominal 1-electron/DN setting is convenient but must not be the only unit-ordering check.
+- **A-038 — GUI illumination and exposure demonstration:** keep the day/night control display-only and separate from the authoritative batch experiments. Map the scene midpoint to the nominal beacon/background levels, sweep beacon flux over a broad illustrative range, and use bounded exposure scaling plus a simplified analog-gain convention to respond to saturation or underexposure. This demonstrates the optional automatic-exposure concept without claiming calibrated camera-driver behavior or changing the reproducible `run_all.py` results.
 
 ## Assumption-register requirements
 
