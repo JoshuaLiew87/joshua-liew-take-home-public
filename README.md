@@ -68,6 +68,28 @@ The centroid is the low-latency baseline. The Gaussian fit is generally more
 accurate when the spot is observable, but is more computationally expensive
 and can lose lock at very low SNR or under model mismatch.
 
+## Key results
+
+The values below are from the seeded final run in `results/latest/`; runtime
+values are specific to the recorded development machine.
+
+| Experiment | Key result | Interpretation |
+|---|---|---|
+| Static localization | At SNR 10, radial RMSE was 0.161 px for the centroid and 0.081 px for the Gaussian fit in the stressed profile. | The Gaussian fit improved accuracy when the spot remained observable. |
+| Low-SNR lock loss | At SNR 1, stressed-profile lock loss was 96.5% for the centroid and 90.1% for the Gaussian fit. | Both methods become unreliable; failure accounting is essential. |
+| Clean theoretical reference | The ideal-model radial precision reference was 0.0564 px at SNR 10. | The CRLB is a clean-model reference, not a universal bound for the stressed sensor. |
+| Dynamic recovery | The 73 Hz disturbance was recovered within 0.007 Hz; 5,000-frame RMS tracking error was 0.164 px (centroid) and 0.082 px (Gaussian). | Both estimators recovered the injected periodic motion; the Gaussian fit gave lower error. |
+| Runtime | Centroid median latency was 0.055 ms; the full Gaussian fit was 1.819 ms warm on the stressed profile. | The centroid is the Python low-latency baseline; Gaussian fitting is better suited to supervisory or compiled paths. |
+| Saturation stress | At 100× nominal flux, centroid RMSE was 0.363 px versus 0.007 px for the clipped-pixel-masked Gaussian fit. | Saturation handling materially changes estimator behavior. |
+
+See the report for uncertainty estimates, controlled ablations, assumptions,
+failure modes, and the exact output paths for every result.
+
+![Static sensor characterization](docs/figures/final_sensor_characterization.png)
+
+*Representative result: bias, precision, radial RMSE, and lock-loss behavior
+across the SNR sweep for the stressed sensor profile.*
+
 The primary `configs/final.yaml` keeps the full-quality Gaussian settings. To
 experiment with a faster tracking configuration, use
 [`configs/fast_gaussian.yaml`](configs/fast_gaussian.yaml) with the runtime
@@ -135,6 +157,12 @@ Matplotlib's default keyboard shortcuts are disabled for this figure. The GUI
 is a demonstration layer; its display timer is intentionally slower than 1
 kHz. The offline benchmark and `run_all.py` outputs are the authoritative
 results.
+
+![Live simulator demonstration](docs/figures/live_demo.png)
+
+The screenshot uses the same production simulator and estimators as the batch
+experiments. It is provided for an interactive review demonstration; the saved
+figures and numerical outputs remain the authoritative results.
 
 ## Output locations
 

@@ -103,18 +103,18 @@
       "failure_rate": 0.0,
       "frame_count": 200,
       "initialization": "cold",
-      "mean_ms": 0.059900595,
-      "median_ms": 0.056833,
+      "mean_ms": 0.05555621,
+      "median_ms": 0.0548125,
       "median_nfev": NaN,
-      "p95_ms": 0.07042534999999998,
+      "p95_ms": 0.060678499999999996,
       "p95_nfev": NaN,
-      "p99_ms": 0.07858523999999989,
+      "p99_ms": 0.06450625,
       "profile": "sensor",
       "sequence": "fixed",
       "success_count": 200,
       "target_snr": 10.0,
       "warmup_count": 20,
-      "worst_ms": 0.119291
+      "worst_ms": 0.070541
     },
     {
       "deadline_miss_count": 200,
@@ -124,18 +124,18 @@
       "failure_rate": 0.0,
       "frame_count": 200,
       "initialization": "cold",
-      "mean_ms": 1.9634393499999998,
-      "median_ms": 1.9880624999999998,
+      "mean_ms": 1.85373998,
+      "median_ms": 1.886667,
       "median_nfev": 4.0,
-      "p95_ms": 2.2590794999999995,
+      "p95_ms": 2.12623365,
       "p95_nfev": 5.0,
-      "p99_ms": 2.482244169999999,
+      "p99_ms": 2.2493579199999996,
       "profile": "sensor",
       "sequence": "fixed",
       "success_count": 200,
       "target_snr": 10.0,
       "warmup_count": 20,
-      "worst_ms": 2.597375
+      "worst_ms": 2.399083
     },
     {
       "deadline_miss_count": 200,
@@ -145,18 +145,18 @@
       "failure_rate": 0.0,
       "frame_count": 200,
       "initialization": "warm",
-      "mean_ms": 2.048038565,
-      "median_ms": 1.9218959999999998,
+      "mean_ms": 1.797939805,
+      "median_ms": 1.8189579999999999,
       "median_nfev": 4.0,
-      "p95_ms": 2.3562006499999906,
+      "p95_ms": 2.05933365,
       "p95_nfev": 5.0,
-      "p99_ms": 5.867331249999999,
+      "p99_ms": 2.2184015799999997,
       "profile": "sensor",
       "sequence": "fixed",
       "success_count": 200,
       "target_snr": 10.0,
       "warmup_count": 20,
-      "worst_ms": 6.555125
+      "worst_ms": 2.2455
     }
   ]
 }

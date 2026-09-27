@@ -372,12 +372,12 @@ on the recorded macOS arm64 development system.
 
 | Profile | Estimator | Initialization | Median [ms] | p95 [ms] | p99 [ms] | Worst [ms] | >1 ms |
 |---|---|---|---:|---:|---:|---:|---:|
-| Ideal | Centroid | cold | 0.056 | 0.070 | 0.115 | 0.143 | 0% |
-| Ideal | Gaussian | cold | 1.795 | 1.992 | 2.147 | 2.274 | 100% |
-| Ideal | Gaussian | warm | 1.757 | 1.992 | 2.128 | 2.175 | 100% |
-| Stressed | Centroid | cold | 0.057 | 0.070 | 0.079 | 0.119 | 0% |
-| Stressed | Gaussian | cold | 1.988 | 2.259 | 2.482 | 2.597 | 100% |
-| Stressed | Gaussian | warm | 1.922 | 2.356 | 5.867 | 6.555 | 100% |
+| Ideal | Centroid | cold | 0.054 | 0.064 | 0.067 | 0.069 | 0% |
+| Ideal | Gaussian | cold | 1.733 | 1.900 | 2.072 | 2.095 | 100% |
+| Ideal | Gaussian | warm | 1.677 | 1.885 | 2.054 | 2.249 | 100% |
+| Stressed | Centroid | cold | 0.055 | 0.061 | 0.065 | 0.071 | 0% |
+| Stressed | Gaussian | cold | 1.887 | 2.126 | 2.249 | 2.399 | 100% |
+| Stressed | Gaussian | warm | 1.819 | 2.059 | 2.218 | 2.246 | 100% |
 
 The centroid is comfortably below the nominal 1 ms estimator budget in this
 Python benchmark. The Gaussian fit is more accurate in many clean and
@@ -599,8 +599,14 @@ The following register records the assumptions introduced so far. Each entry
 is also recorded in [docs/decisions.md](docs/decisions.md). Values are assumptions or
 calibrations for this exercise, not measurements of a deployed camera.
 
+\begingroup
+\scriptsize
+\sloppy
+\renewcommand{\arraystretch}{0.78}
+\setlength{\tabcolsep}{2.5pt}
+
 | ID | Assumption or value | Units | Rationale | Expected effect | Validation or limitation |
-|---|---|---|---|---|---|
+|------|--------------------------|--------|--------------------------|--------------------------|--------------------------|
 | A-001 | Pixel centers are integer coordinates and boundaries are half a pixel away | pixels | Maintains a consistent forward model | Affects phase and boundary behavior | PSF tests |
 | A-002 | Arrays use `image[y, x]`; positions use `(x, y)` | — | Separates array and Cartesian conventions | Prevents axis swaps | Foundation tests |
 | A-003 | The PSF is a pixel-integrated circular Gaussian | — | Represents finite pixel area | Affects phase response and theory | Flux and symmetry tests |
@@ -629,15 +635,17 @@ calibrations for this exercise, not measurements of a deployed camera.
 | A-026 | Gaussian IRLS uses a configurable 1 DN² lower bound on approximate Poisson/read-noise variance | DN² | Prevents extreme weights from tiny or negative fitted tail-background values | Changes approximate fit weighting in low-signal tails | Final sweeps; likelihood remains approximate |
 | A-027 | Runtime frames are generated before timing; 20 warm-up calls are excluded; centroid cold and Gaussian cold/warm paths are timed against a 1 ms interval | ms, frames | Separates estimator execution from simulation and initialization overhead | Determines reported latency and deadline-miss rates | 200-frame ideal and stressed benchmark |
 | A-028 | The final dynamic record uses 5,000 frames at 1 kHz, 0.04-pixel correlated jitter, a 73 Hz/0.05-pixel x-axis disturbance, Hann-windowed spectral analysis, and a 20 Hz lower search limit | frames, Hz, pixels | Provides frequency resolution while separating slow OU drift from the intentional disturbance | Analysis results depend on windowing, search band, and finite-record noise | Dynamic recovery output and 43-test suite |
-| A-029 | Phase 6 controlled stress cases use 300 paired trials at reference SNR 10, a 1-pixel lock-loss threshold, and fixed nominal photon flux for background/defocus comparisons | frames, dimensionless, pixels | Makes outdoor-condition effects measurable without silently restoring baseline SNR | Results are finite-sample engineering evidence, not field validation | `results/latest/results/real_world/real_world_conditions.csv` and reproducibility test |
+| A-029 | Phase 6 controlled stress cases use 300 paired trials at reference SNR 10, a 1-pixel lock-loss threshold, and fixed nominal photon flux for background/defocus comparisons | frames, dimensionless, pixels | Makes outdoor-condition effects measurable without silently restoring baseline SNR | Results are finite-sample engineering evidence, not field validation | Real-world CSV/JSON outputs and reproducibility test |
 | A-030 | Scintillation is a mean-one correlated log-normal flux multiplier with log-intensity RMS 0.5 and lag-one correlation 0.95 | dimensionless | Captures temporal intensity modulation while preserving the distinction between flux variation and beam wander | Changes effective SNR and can create intermittent lock loss | Controlled Phase 6 experiment; atmospheric statistics are not measured |
 | A-031 | The controlled outdoor study uses PSF sigma 2.4 pixels for defocus, a 200-electron/pixel bright background with 1.5/-1.0 electron/pixel gradients, and 100x nominal flux for saturation | pixels, electrons, electrons/pixel, multiplier | Provides interpretable stress levels within the existing sensor model | Quantifies sensitivity to width, background, and clipping; does not model blooming or optical halos | Saved condition metadata and figure |
 | A-032 | GUI keyboard demonstrations are display-only; manual nudges are 0.1 pixels, flux presets use SNR 1 and 1,000, and the forced hot pixel is fixed at a Gaussian-ROI edge | pixels, dimensionless | Makes phase, saturation, gradient, and outlier behavior easy to demonstrate during review without changing reproducible experiments | Interactive behavior is illustrative and depends on figure focus | GUI shortcut test; offline results remain authoritative |
 | A-033 | Fast Gaussian tracking uses a 13 × 13 ROI, one IRLS pass, a 30-evaluation optimizer limit, previous-position ROI placement, and previous-position initialization | pixels, passes, evaluations | Provides a configurable speed study without changing the full-quality acquisition defaults | Reduces latency but can increase model truncation, convergence, or tracking failure risk | Sequential runtime benchmark; not the production default |
 | A-034 | Acquisition and sequential tracking runtime benchmarks are reported separately | — | Prevents fixed-position estimator timing from being mistaken for deployed warm-start behavior | Makes warm-start conclusions conditional on input sequence | 200-frame fixed and dynamic benchmark artifacts |
-| A-035 | The ranking ablation uses 250 paired trials at SNR 1 and 3 for five conditions: ideal, background gradient, PRNU/hot pixels, quantization/saturation, and full stressed | trials, dimensionless | Separates low-SNR convergence effects from contamination and clipping effects | Provides evidence for the clean/stressed ranking reversal | `results/latest/results/estimator_ablation/` and Figure 2 |
-| A-036 | Dynamic amplitude repeat uses five independent master seeds and 2,500 frames per seed at target SNR 10 | seeds, frames, dimensionless | Quantifies finite-record amplitude variation without replacing the primary 5,000-frame result | Gives uncertainty on the apparent amplitude bias; short records can weaken frequency recovery | `results/latest/results/dynamic_repeats/` and Figure 6 |
-| A-037 | Sensor-chain validation includes a non-unity 2-electron/DN conversion-gain case | electrons/DN | Ensures the nominal 1-electron/DN choice does not mask unit-ordering errors | Separates charge-domain clipping from DN conversion | `test_adc_chain_respects_nonunity_electrons_per_dn` |
+| A-035 | The ranking ablation uses 250 paired trials at SNR 1 and 3 for five conditions: ideal, background gradient, PRNU/hot pixels, quantization/saturation, and full stressed | trials, dimensionless | Separates low-SNR convergence effects from contamination and clipping effects | Provides evidence for the clean/stressed ranking reversal | Ablation outputs and Figure 2 |
+| A-036 | Dynamic amplitude repeat uses five independent master seeds and 2,500 frames per seed at target SNR 10 | seeds, frames, dimensionless | Quantifies finite-record amplitude variation without replacing the primary 5,000-frame result | Gives uncertainty on the apparent amplitude bias; short records can weaken frequency recovery | Repeat outputs and Figure 6 |
+| A-037 | Sensor-chain validation includes a non-unity 2-electron/DN conversion-gain case | electrons/DN | Ensures the nominal 1-electron/DN choice does not mask unit-ordering errors | Separates charge-domain clipping from DN conversion | ADC conversion-gain test |
+
+\endgroup
 
 ## 11. Reproducibility and implementation status
 
@@ -654,7 +662,7 @@ environment on the following development system:
 | Operating system | macOS 27.0, arm64 |
 | Python environment | `.venv`, Python 3.13.1 |
 | Core packages | NumPy 2.5.3; SciPy 1.18.1; Matplotlib 3.11.2; PyYAML 6.0.3; pytest 9.1.1 |
-| Final run | `20260927T072529Z` |
+| Final run | `20260927T080135Z` |
 | Experiment sizes | 1,000 static trials/SNR; 200 ROI trials; 200 runtime frames plus 20 warm-up calls; 5,000 dynamic frames; 300 outdoor-condition trials; 250 ablation trials/condition/SNR; five 2,500-frame amplitude repeats |
 | Reproduction command | `python run_all.py --config configs/final.yaml` |
 
@@ -712,28 +720,42 @@ The hot-pixel case is a controlled GUI intervention rather than a change to
 the production sensor model, and is used to discuss estimator sensitivity
 rather than claim automatic rejection by the Gaussian fit.
 
+![Live simulator demonstration](docs/figures/live_demo.png)
+
+*Figure 9. Live simulator demonstration using the production simulator and
+estimators. The display is intentionally slower than the 1 kHz benchmark and
+is included as a review aid rather than as a quantitative result.*
+
 ## 12. Assignment traceability
+
+\begingroup
+\small
+\sloppy
+\renewcommand{\arraystretch}{0.86}
+\setlength{\tabcolsep}{3pt}
 
 | Assignment requirement | Evidence | Status |
 |---|---|---|
-| Configurable Gaussian spot at a known sub-pixel position | Sections 2.1–2.2; `sim/psf.py`; tests | Implemented |
-| Photon, read, dark, hot-pixel, gradient, PRNU, and quantization noise | Section 2.3; `sim/noise.py`; tests | Implemented |
-| SNR control and SNR sweep | Section 2.2; `config.py`; `experiments/characterize_snr.py` | Complete; 1,000-trial results saved |
-| At least two centroiding methods | Section 3; `estimators/` | Implemented and characterized |
-| Bias and standard deviation versus SNR | Section 5; `experiments/characterize_snr.py`; characterization outputs | Complete; ideal and stressed figures saved |
-| Theoretical precision reference | Section 6; `experiments/theory.py`; characterization outputs | Complete for clean reference model |
-| Per-frame compute cost and 1 kHz tradeoff | Section 7; `experiments/benchmark_runtime.py`; runtime outputs | Complete Python baseline |
-| Configurable Gaussian tracking speed study | Section 7.1; `configs/fast_gaussian.yaml`; `results/performance/` | Complete supplemental benchmark; fast profile remains optional |
-| Estimator ranking ablation | Section 5.1; `experiments/estimator_ablation.py`; `results/latest/results/estimator_ablation/` | Complete; controlled causal comparison at SNR 1 and 3 |
-| Moving spot with drift, jitter, and periodic disturbance | Section 8; `sim/trajectory.py`; `experiments/dynamic_tracking.py` | Complete; 5,000-frame OU sequence saved |
+| Configurable Gaussian spot at a known sub-pixel position | Sections 2.1–2.2; PSF module; tests | Implemented |
+| Photon, read, dark, hot-pixel, gradient, PRNU, and quantization noise | Section 2.3; sensor-noise module; tests | Implemented |
+| SNR control and SNR sweep | Section 2.2; configuration; SNR experiment | Complete; 1,000-trial results saved |
+| At least two centroiding methods | Section 3; estimator package | Implemented and characterized |
+| Bias and standard deviation versus SNR | Section 5; SNR experiment; characterization outputs | Complete; ideal and stressed figures saved |
+| Theoretical precision reference | Section 6; theory experiment; characterization outputs | Complete for clean reference model |
+| Per-frame compute cost and 1 kHz tradeoff | Section 7; runtime experiment; runtime outputs | Complete Python baseline |
+| Configurable Gaussian tracking speed study | Section 7.1; fast-Gaussian profile; performance outputs | Complete supplemental benchmark; fast profile remains optional |
+| Estimator ranking ablation | Section 5.1; ablation experiment; ablation outputs | Complete; controlled causal comparison at SNR 1 and 3 |
+| Moving spot with drift, jitter, and periodic disturbance | Section 8; trajectory and dynamic experiment | Complete; 5,000-frame OU sequence saved |
 | Recovered trajectory error | Section 8; dynamic summary and trajectory outputs | Complete |
 | Recovered disturbance frequency and amplitude | Section 8; dynamic spectrum, summary, and multi-seed repeat outputs | Complete |
 | Challenging parameters and failure modes | Sections 3, 5, 8, 9, and 10 | Complete; controlled stress results and outdoor handling table included |
-| Outdoor real-world conditions and handling | Section 9; `experiments/real_world_conditions.py` | Complete analysis; selected effects quantified |
-| One-command reproducibility | Section 11; `run_all.py`; `results/latest/run_manifest.json` and `results/runs/` | Complete; production workflow verified |
+| Outdoor real-world conditions and handling | Section 9; outdoor-conditions experiment | Complete analysis; selected effects quantified |
+| One-command reproducibility | Section 11; `run_all.py`; run manifest and run archive | Complete; production workflow verified |
 | Written report | This document | Complete through final integration; runtime caveat documented |
-| Reproducible dynamic scenario and analysis | Section 8; `results/latest/results/dynamic/` and `dynamic_repeats/` | Complete |
-| Optional live interactive demonstration | Section 11; `experiments/live_gui.py` | Implemented |
+| Reproducible dynamic scenario and analysis | Section 8; dynamic outputs and repeat outputs | Complete |
+| Optional live interactive demonstration | Section 11; live GUI module | Implemented |
+
+\endgroup
 
 ## 13. Current limitations and next steps
 

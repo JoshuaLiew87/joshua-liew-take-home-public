@@ -1,4 +1,0 @@
-profile,estimator,initialization,target_snr,frame_count,warmup_count,median_ms,p95_ms,p99_ms,worst_ms,mean_ms,success_count,failure_count,failure_rate,deadline_miss_count,deadline_miss_rate,median_nfev,p95_nfev
-ideal,centroid,cold,10.0,200,20,0.055041,0.0628372,0.07583332999999981,0.129416,0.056346230000000004,200,0,0.0,0,0.0,nan,nan
-ideal,gaussian,cold,10.0,200,20,1.7799580000000002,2.0123312499999995,2.16211434,2.445958,1.752343115,200,0,0.0,200,1.0,4.0,4.0
-ideal,gaussian,warm,10.0,200,20,1.8760835,2.2461878,2.76680125,3.120375,1.912718155,200,0,0.0,200,1.0,4.0,4.0

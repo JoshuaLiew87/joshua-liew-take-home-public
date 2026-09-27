@@ -159,15 +159,25 @@ def plot_repeat_results(aggregates: list[RepeatAggregate], output_path: str | Pa
     means = [row.mean_estimated_amplitude_px for row in aggregates]
     errors = [row.std_estimated_amplitude_px for row in aggregates]
     axis.errorbar(x, means, yerr=errors, fmt="o", capsize=4, color="0.25")
+    annotation_offsets = {"centroid": (0, -30), "gaussian": (0, 18)}
     for index, row in enumerate(aggregates):
         axis.scatter(index, row.mean_estimated_amplitude_px, color=colors[row.estimator], label=labels[row.estimator], zorder=3)
         axis.annotate(
             f"bias={row.amplitude_bias_px:+.4f} px",
             (index, row.mean_estimated_amplitude_px),
-            xytext=(0, 12), textcoords="offset points", ha="center", fontsize="small",
+            xytext=annotation_offsets[row.estimator],
+            textcoords="offset points",
+            ha="center",
+            fontsize="small",
+            bbox={"boxstyle": "round,pad=0.2", "facecolor": "white", "alpha": 0.8, "edgecolor": "none"},
         )
     true_amplitude = aggregates[0].true_amplitude_px
-    axis.axhline(true_amplitude, color="black", linestyle="--", label="injected amplitude")
+    axis.axhline(
+        true_amplitude,
+        color="black",
+        linestyle="--",
+        label=f"injected amplitude ({true_amplitude:.3f} px)",
+    )
     axis.set_xticks(x, [labels[row.estimator] for row in aggregates])
     axis.set_ylabel("recovered disturbance amplitude [pixel]")
     axis.set_title("Multi-seed amplitude-recovery repeat")

@@ -242,6 +242,7 @@ def save_ablation_results(
 
 def plot_ablation(metrics: list[AblationMetric], output_path: str | Path) -> Path:
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
 
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -250,7 +251,7 @@ def plot_ablation(metrics: list[AblationMetric], output_path: str | Path) -> Pat
     colors = dict(zip(conditions, plt.cm.viridis(np.linspace(0.1, 0.9, len(conditions)))))
     markers = {"centroid": "o", "gaussian": "s"}
     labels = {"centroid": "Windowed centroid", "gaussian": "Gaussian fit"}
-    figure, axes = plt.subplots(1, 2, figsize=(13, 5), constrained_layout=True)
+    figure, axes = plt.subplots(1, 2, figsize=(13, 5.8))
     for condition in conditions:
         for estimator in ("centroid", "gaussian"):
             selected = [
@@ -263,7 +264,7 @@ def plot_ablation(metrics: list[AblationMetric], output_path: str | Path) -> Pat
                 [metric.lock_failure_rate for metric in selected],
                 yerr=[metric.lock_failure_rate_stderr for metric in selected],
                 color=colors[condition], marker=markers[estimator], linestyle="-",
-                label=f"{condition}: {labels[estimator]}", capsize=3,
+                capsize=3,
             )
             axes[1].plot(
                 [metric.requested_snr for metric in selected],
@@ -281,8 +282,38 @@ def plot_ablation(metrics: list[AblationMetric], output_path: str | Path) -> Pat
     axes[1].set_title("Controlled RMSE ablation")
     for axis in axes:
         axis.grid(True, alpha=0.3)
-    axes[0].legend(fontsize="small", ncol=2)
-    figure.suptitle("Estimator ranking under isolated sensor effects")
+    condition_handles = [
+        Line2D(
+            [0], [0], color=colors[condition], marker="o", linestyle="-",
+            label=condition,
+        )
+        for condition in conditions
+    ]
+    estimator_handles = [
+        Line2D(
+            [0], [0], color="0.25", marker=markers[estimator], linestyle="-",
+            label=labels[estimator],
+        )
+        for estimator in ("centroid", "gaussian")
+    ]
+    figure.legend(
+        handles=condition_handles,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.125),
+        ncol=len(condition_handles),
+        fontsize="small",
+        title="Sensor condition",
+    )
+    figure.legend(
+        handles=estimator_handles,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 0.025),
+        ncol=2,
+        fontsize="small",
+        title="Estimator",
+    )
+    figure.suptitle("Estimator ranking under isolated sensor effects", y=0.98)
+    figure.subplots_adjust(top=0.86, bottom=0.31, wspace=0.24)
     figure.savefig(output, dpi=160)
     plt.close(figure)
     return output
