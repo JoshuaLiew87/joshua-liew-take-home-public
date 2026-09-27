@@ -14,10 +14,10 @@ Two estimators have been implemented: a windowed, background-subtracted
 intensity centroid and a bounded pixel-integrated two-dimensional Gaussian
 fit. The current implementation also includes a reproducible trajectory
 generator, a static Monte Carlo characterization runner, and an optional live
-visualization. At this checkpoint, the simulator, estimators, static
-characterization, runtime benchmark, and dynamic recovery analysis have been
-verified by 44 automated tests. The final `run_all.py` reproduction workflow
-and real-world conditions analysis are complete. Runtime results
+visualization. The simulator, estimators, static characterization, runtime
+benchmark, and dynamic recovery analysis are covered by 44 automated tests.
+The final `run_all.py` reproduction workflow and real-world conditions analysis
+are complete. Runtime results
 are treated as a Python development baseline rather than a flight-hardware
 guarantee. In the final stressed SNR-10 characterization, radial RMSE was
 0.161 pixels for the centroid and 0.081 pixels for the Gaussian fit. At SNR
@@ -25,7 +25,7 @@ guarantee. In the final stressed SNR-10 characterization, radial RMSE was
 sequence recovered the injected 73 Hz disturbance within 0.007 Hz, with RMS
 tracking errors of 0.164 and 0.082 pixels. Under 100x nominal flux with
 saturation, the centroid RMSE was 0.363 pixels while the clipped-pixel-masked
-Gaussian fit achieved 0.007 pixels. The centroid measured 0.055 ms on a Macbook Pro
+Gaussian fit achieved 0.007 pixels. The centroid measured 0.055 ms on a MacBook Pro
 reference system and 0.485 ms on an NVIDIA Jetson Orin, remaining within the
 1 ms estimator budget on both. The full Gaussian fit measured 1.819 ms warm on
 the Mac and 10.482 ms warm on the Jetson, so it is better suited to a slower
@@ -65,12 +65,12 @@ at a nominal frame rate of 1 kHz.
 The spot width is specified using the assignment's approximately 7-pixel
 diameter at the 1/e² intensity level. For
 
-\[
+$$
 I(r)=I_0\exp\left(-\frac{2r^2}{w^2}\right),
-\]
+$$
 
-the corresponding Gaussian standard deviation is \(\sigma=w/2\). Thus, a
-7-pixel diameter gives a nominal \(\sigma=1.75\) pixels.
+the corresponding Gaussian standard deviation is $\sigma=w/2$. Thus, a
+7-pixel diameter gives a nominal $\sigma=1.75$ pixels.
 
 ### 2.2 Pixel-integrated point-spread function
 
@@ -82,8 +82,8 @@ effects and avoids the bias that would result from evaluating the Gaussian at
 pixel centers only.
 
 The physical brightness parameter is the total expected spot charge,
-\(N_{total}\), in electrons. The simulator also accepts a target SNR, which
-is converted to \(N_{total}\) using a reference spot centered on a pixel.
+$N_{total}$, in electrons. The simulator also accepts a target SNR, which
+is converted to $N_{total}$ using a reference spot centered on a pixel.
 Because the actual peak pixel depends on sub-pixel position and spot width,
 each rendered frame records both the reference SNR and an effective SNR.
 
@@ -138,17 +138,17 @@ fit ROI is 15 × 15 pixels.
 The centroid estimator fits either a constant background or a plane to the
 border of the local ROI:
 
-\[
+$$
 B(x,y)=b_0+b_x(x-c_x)+b_y(y-c_y).
-\]
+$$
 
 The fitted background is subtracted from the ROI, negative residuals are
 clipped to zero, and the remaining intensities are used as weights:
 
-\[
+$$
 \hat{x}=\frac{\sum_i w_i x_i}{\sum_i w_i},\qquad
 \hat{y}=\frac{\sum_i w_i y_i}{\sum_i w_i}.
-\]
+$$
 
 The estimator returns the position, ROI bounds, peak value, saturation flag,
 positive signal, and fitted background coefficients. It returns an explicit
@@ -163,11 +163,11 @@ and the removal of faint PSF tails during background subtraction.
 
 The second estimator fits the parameter vector
 
-\[
+$$
 \theta=(x_0,y_0,A,\sigma,b_0,b_x,b_y),
-\]
+$$
 
-where \(A\) is total spot flux in DN and the background is a local plane. The
+where $A$ is total spot flux in DN and the background is a local plane. The
 spot contribution is integrated over each pixel using normal-CDF differences,
 matching the simulator's forward model. Position, flux, and width are bounded
 by configurable limits. Background coefficients remain unbounded.
@@ -177,11 +177,11 @@ the peak pixel otherwise. The fit uses bounded SciPy `least_squares` with an
 analytical Jacobian. Two fixed iteratively reweighted steps approximate
 Poisson-plus-read-noise weighting using
 
-\[
+$$
 V_i\approx\frac{\max(\mu_i,0)}{g}+\sigma_{r,DN}^2,
-\]
+$$
 
-where \(g\) is the electrons-per-DN conversion gain. A configurable 1 DN²
+where $g$ is the electrons-per-DN conversion gain. A configurable 1 DN²
 floor is applied to the first term before weighting, preventing tiny or
 negative fitted tail-background values from receiving numerically dominant
 weights. Pixels at the ADC limit
@@ -267,7 +267,7 @@ operational quality flags rather than access to the true position.
 The plots show uncertainty bars wherever a Monte Carlo uncertainty estimate is
 well-defined. Bias bars are standard errors of the mean over valid estimates;
 the per-axis standard-deviation bars use the usual approximation
-\\(s/\\sqrt{2(n-1)}\\). Radial RMSE bars use a delta-method standard error based
+$s/\sqrt{2(n-1)}$. Radial RMSE bars use a delta-method standard error based
 on the sample variance of squared radial errors. Invalid-result and lock-loss
 bars are binomial standard errors computed over all requested trials. Thus the
 bars describe finite-trial uncertainty in the reported summary, rather than a

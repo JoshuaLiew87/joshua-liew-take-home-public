@@ -386,15 +386,36 @@ def plot_dynamic_results(
     time_s = np.arange(result.positions_xy.shape[0]) / config.trajectory.frame_rate_hz
     figure, axes = plt.subplots(2, 2, figsize=(12, 8), constrained_layout=True)
     colors = {"centroid": "tab:blue", "gaussian": "tab:orange"}
+    true_color = "#2a9d8f"
     labels = {"centroid": "Windowed centroid", "gaussian": "Gaussian fit"}
     axis_index = 0 if config.trajectory.disturbance_axis == "x" else 1
     axis_name = "x" if axis_index == 0 else "y"
 
     for index, coordinate in enumerate(("x", "y")):
         axis = axes[0, index]
-        axis.plot(time_s, result.positions_xy[:, index], "k-", linewidth=1.2, label="true")
+        # Keep the known reference trajectory visually dominant even when an
+        # estimator tracks it closely.  This makes agreement readable rather
+        # than allowing the noisy estimates to obscure the ground truth.
+        axis.plot(
+            time_s,
+            result.positions_xy[:, index],
+            color=true_color,
+            linestyle="-",
+            linewidth=0.5,
+            alpha=0.9,
+            label="true",
+            zorder=5,
+        )
         for estimator, estimates in result.estimates_xy.items():
-            axis.plot(time_s, estimates[:, index], color=colors[estimator], alpha=0.8, label=labels[estimator])
+            axis.plot(
+                time_s,
+                estimates[:, index],
+                color=colors[estimator],
+                linewidth=0.9,
+                alpha=0.55,
+                label=labels[estimator],
+                zorder=2,
+            )
         axis.set_title(f"{coordinate}-coordinate trajectory")
         axis.set_xlabel("time [s]")
         axis.set_ylabel("position [pixel]")
@@ -421,7 +442,7 @@ def plot_dynamic_results(
         )
     axes[1, 1].axvline(
         config.trajectory.disturbance_frequency_hz,
-        color="black",
+        color=true_color,
         linestyle="--",
         label="true disturbance",
     )

@@ -1,6 +1,6 @@
 # Decision log
 
-## Day 1 foundations
+## Foundations
 
 - **A-001 — Coordinate convention:** pixel centers are integer coordinates and pixel boundaries are half a pixel away. This keeps the simulator, estimators, and theory consistent.
 - **A-002 — Array/coordinate order:** represent a spot position as `(x, y)` while storing images as `image[y, x]`. This matches the usual array convention without confusing coordinate order.

@@ -581,7 +581,7 @@ second simulator implementation.
 
 There is already a baseline CRLB derivation and a baseline per-frame timing experiment, so neither should be treated as a separate stretch feature. The preferred optional extension is a concise end-to-end latency budget covering exposure, readout, transfer, preprocessing, estimation, filtering, and control output.
 
-If the baseline is not complete by the end of Day 5, do not implement an extension. Describe it under “what I would do with more time” instead.
+If the baseline is not complete before an optional extension is attempted, do not implement the extension. Describe it under “what I would do with more time” instead.
 
 ## 15. Tests and validation
 
