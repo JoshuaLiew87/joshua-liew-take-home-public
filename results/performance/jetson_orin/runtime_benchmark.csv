@@ -1,0 +1,4 @@
+profile,estimator,initialization,sequence,target_snr,frame_count,warmup_count,median_ms,p95_ms,p99_ms,worst_ms,mean_ms,success_count,failure_count,failure_rate,deadline_miss_count,deadline_miss_rate,median_nfev,p95_nfev
+sensor,centroid,cold,fixed,10.0,200,20,0.484693,0.5126764,0.54400381,0.549015,0.489001125,200,0,0.0,0,0.0,nan,nan
+sensor,gaussian,cold,fixed,10.0,200,20,11.901325,12.978379,14.01774624,14.063257,11.500371965,200,0,0.0,200,1.0,4.0,5.0
+sensor,gaussian,warm,fixed,10.0,200,20,10.481919999999999,12.4172565,13.45877245,13.491489,10.917605090000002,200,0,0.0,200,1.0,4.0,5.0

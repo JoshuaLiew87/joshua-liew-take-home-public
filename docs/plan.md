@@ -26,6 +26,7 @@ The final repository must provide:
 - Monte Carlo curves showing signed bias, standard deviation, RMSE, and failure rate versus SNR.
 - A theoretical position-precision reference derived from the simulator's forward model.
 - Runtime measurements including tail latency, not only average runtime.
+- A bounded target-validation runtime record on the NVIDIA Jetson Orin, kept separate from the Mac reference because timing is machine-dependent.
 - A dynamic scenario with drift, jitter, and one periodic disturbance: 2,000 frames for development and up to 5,000 frames for the final result if the runtime remains acceptable.
 - Frequency and amplitude recovery results for the injected disturbance.
 - A written analysis of outdoor failure modes and possible detection/mitigation strategies.
@@ -401,7 +402,12 @@ Benchmark estimators on already-generated frames so simulator cost is not confus
 - failure/convergence rate;
 - cold-start and warm-start fit timing if both are considered.
 
-Benchmark the full Python implementation on the actual development machine and record Python, NumPy, and SciPy versions. Compare the estimator time to the 1 ms frame interval, while explicitly noting that camera transfer, preprocessing, synchronization, filtering, and gimbal output also consume the real system budget.
+Benchmark the full Python implementation on the Mac reference development
+machine and on the NVIDIA Jetson Orin target-validation device. Record Python,
+NumPy, SciPy, platform, and JetPack/OS versions for both. Compare each
+estimator time to the 1 ms frame interval, while explicitly noting that camera
+transfer, preprocessing, synchronization, filtering, and gimbal output also
+consume the real system budget.
 
 The engineering recommendation will distinguish:
 
@@ -417,7 +423,9 @@ failure, optimizer-iteration, and 1 ms deadline-miss statistics. It measures
 centroid cold-start and Gaussian cold/warm-start paths and records Python,
 NumPy, SciPy, and platform versions. The initial 200-frame SNR-10 benchmark
 has been run for both ideal and stressed profiles; final interpretation is
-documented in `report.md`.
+documented in `report.md`. The same final stressed benchmark was subsequently
+run on the Jetson Orin; its runtime and dynamic-summary artifacts are retained
+under `results/performance/jetson_orin/`.
 
 ### Phase 4 follow-up: configurable Gaussian tracking speed study
 
@@ -621,7 +629,7 @@ Recommended structure:
 12. What I would do with more time.
 13. Reproduction instructions.
 
-Every important plot should state the scenario, seed/trial count, estimator settings, and whether failures were included or excluded.
+Every important plot should state the scenario, seed/trial count, estimator settings, and whether failures were included or excluded. The report should distinguish the Mac reference run from any embedded-target validation and should record the target platform, software versions, and the estimator-only scope of the timing.
 
 The report must also contain these two explicit tables:
 
@@ -664,7 +672,7 @@ expose a needed correction in an earlier phase.
 | Foundations and simulator | Units, coordinates, pixel-integrated PSF, sensor/noise chain, SNR calibration, and reproducibility | Complete; `sim/`, `config.py`, foundation tests, and saved manifests |
 | Estimators | Windowed background-subtracted centroid and pixel-integrated Gaussian fit with analytical Jacobian | Complete; `estimators/`, estimator tests, and static characterization |
 | Theory and static characterization | Fisher-information reference, Monte Carlo SNR sweeps, error bars, lock-loss analysis, ROI sensitivity, and ranking ablation | Complete; `experiments/theory.py`, `experiments/characterize_snr.py`, and `experiments/estimator_ablation.py` |
-| Runtime analysis | Fixed-position and sequential timing, tail latency, warm starts, and optional fast Gaussian configuration | Complete supplemental benchmark; the Python Gaussian fit remains above the deterministic 1 ms target |
+| Runtime analysis | Fixed-position and sequential timing, tail latency, warm starts, optional fast Gaussian configuration, and Jetson target validation | Complete; the Mac reference and Jetson CPU timings agree on the 1 kHz tradeoff, while the Python Gaussian fit remains above the deterministic 1 ms target |
 | Dynamic tracking | Bounded OU drift, correlated jitter, periodic disturbance, trajectory recovery, frequency/amplitude analysis, and multi-seed amplitude repeat | Complete; `experiments/dynamic_tracking.py` and `experiments/dynamic_repeats.py` |
 | Real-world analysis | Scintillation, background, defocus, saturation, outdoor failure modes, and mitigations | Complete analysis with selected controlled stress experiments |
 | Live GUI | Optional review demonstration using the production simulator and estimators | Implemented; display-only and not authoritative for 1 kHz claims |

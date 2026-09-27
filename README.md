@@ -20,7 +20,11 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-On Windows, activate the environment with `.venv\Scripts\activate` instead.
+On Windows, create the environment with `py -m venv .venv`, then activate it
+with `.venv\Scripts\activate.bat` in Command Prompt or
+`.\.venv\Scripts\Activate.ps1` in PowerShell. On a Jetson or other Linux
+system, use the commands above. The project uses CPU NumPy/SciPy execution;
+CUDA or TensorRT is not required.
 
 ## Run the complete study
 
@@ -71,8 +75,9 @@ and can lose lock at very low SNR or under model mismatch.
 
 ## Key results
 
-The values below are from the seeded final run in `results/latest/`; runtime
-values are specific to the recorded development machine.
+The values below are from the seeded Mac reference run in `results/latest/`.
+The Jetson target-validation result is reported separately because runtime is
+machine and load dependent.
 
 | Experiment | Key result | Interpretation |
 |---|---|---|
@@ -80,11 +85,17 @@ values are specific to the recorded development machine.
 | Low-SNR lock loss | At SNR 1, stressed-profile lock loss was 96.5% for the centroid and 90.1% for the Gaussian fit. | Both methods become unreliable; failure accounting is essential. |
 | Clean theoretical reference | The ideal-model radial precision reference was 0.0564 px at SNR 10. | The CRLB is a clean-model reference, not a universal bound for the stressed sensor. |
 | Dynamic recovery | The 73 Hz disturbance was recovered within 0.007 Hz; 5,000-frame RMS tracking error was 0.164 px (centroid) and 0.082 px (Gaussian). | Both estimators recovered the injected periodic motion; the Gaussian fit gave lower error. |
-| Runtime | Centroid median latency was 0.055 ms; the full Gaussian fit was 1.819 ms warm on the stressed profile. | The centroid is the Python low-latency baseline; Gaussian fitting is better suited to supervisory or compiled paths. |
+| Runtime (Mac reference) | Centroid median latency was 0.055 ms; the full Gaussian fit was 1.819 ms warm on the stressed profile. | The centroid is the Python low-latency baseline; Gaussian fitting is better suited to supervisory or compiled paths. |
+| Jetson target validation | On an NVIDIA Jetson Orin, centroid median latency was 0.485 ms and full Gaussian warm latency was 10.482 ms; seeded accuracy and dynamic metrics matched the Mac run to floating-point precision. | The centroid remains within the estimator-only 1 ms budget; the Gaussian fit remains a slower supervisory or compiled candidate. |
 | Saturation stress | At 100× nominal flux, centroid RMSE was 0.363 px versus 0.007 px for the clipped-pixel-masked Gaussian fit. | Saturation handling materially changes estimator behavior. |
 
 See the report for uncertainty estimates, controlled ablations, assumptions,
 failure modes, and the exact output paths for every result.
+
+The Jetson validation used Ubuntu 22.04.5 on aarch64 with JetPack R36.4.3,
+Python 3.13.13, NumPy 2.5.3, and SciPy 1.18.1. It used the CPU NumPy/SciPy
+implementation; CUDA and TensorRT were not used. The saved runtime, dynamic
+summary, and manifest artifacts are in `results/performance/jetson_orin/`.
 
 ![Static sensor characterization](docs/figures/final_sensor_characterization.png)
 
@@ -102,7 +113,9 @@ python -m experiments.benchmark_runtime \
   --config configs/fast_gaussian.yaml \
   --sequence dynamic \
   --frames 200 \
-  --warmup 20
+  --warmup 20 \
+  --output-dir results/performance/gaussian_tracking_fast \
+  --figure results/performance/gaussian_tracking_fast/runtime_benchmark.png
 ```
 
 This optional study changes the Gaussian ROI, IRLS pass count, optimizer
@@ -140,6 +153,8 @@ python -m experiments.live_gui \
   --profile sensor \
   --snr 10
 ```
+
+The interactive window requires a graphical display. On a headless Jetson, set `MPLBACKEND=Agg` when using `--save-gif`; GIF export does not require a display.
 
 The GUI shows the simulated sensor frame, true and estimated positions,
 trajectory history, and position error. It provides controls for SNR, motion,
@@ -197,7 +212,10 @@ python -m experiments.live_gui \
 - Estimator ablation: `results/latest/results/estimator_ablation/`
 - Dynamic amplitude repeats: `results/latest/results/dynamic_repeats/`
 - Optional Gaussian tracking speed study: `results/performance/`
+- Jetson Orin target validation: `results/performance/jetson_orin/`
 - Figures: `results/latest/figures/`
+- Standalone runtime command defaults: `results/runtime_sensor/` and
+  `results/standalone/figures/` when `--output-dir` and `--figure` are omitted.
 - Reproduction metadata: `results/latest/run_manifest.json`
 
 The simulator and estimators use `image[y, x]` array indexing and `(x, y)`

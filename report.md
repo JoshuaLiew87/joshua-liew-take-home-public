@@ -19,7 +19,19 @@ characterization, runtime benchmark, and dynamic recovery analysis have been
 verified by 44 automated tests. The final `run_all.py` reproduction workflow
 and real-world conditions analysis are complete. Runtime results
 are treated as a Python development baseline rather than a flight-hardware
-guarantee.
+guarantee. In the final stressed SNR-10 characterization, radial RMSE was
+0.161 pixels for the centroid and 0.081 pixels for the Gaussian fit. At SNR
+1, lock loss was 96.5% and 90.1%, respectively. The 5,000-frame dynamic
+sequence recovered the injected 73 Hz disturbance within 0.007 Hz, with RMS
+tracking errors of 0.164 and 0.082 pixels. Under 100x nominal flux with
+saturation, the centroid RMSE was 0.363 pixels while the clipped-pixel-masked
+Gaussian fit achieved 0.007 pixels. The centroid measured 0.055 ms on a Macbook Pro
+reference system and 0.485 ms on an NVIDIA Jetson Orin, remaining within the
+1 ms estimator budget on both. The full Gaussian fit measured 1.819 ms warm on
+the Mac and 10.482 ms warm on the Jetson, so it is better suited to a slower
+supervisory path or a compiled implementation than to a 1 kHz Python loop.
+These timings exclude camera acquisition, transfer, synchronization, filtering,
+and gimbal actuation.
 
 ## 1. Introduction
 
@@ -436,6 +448,28 @@ The raw sequential benchmark files are retained in
 `results/performance/gaussian_tracking_baseline/` and
 `results/performance/gaussian_tracking_fast/`.
 
+### 7.2 Jetson Orin target validation
+
+The final workflow was also run on an NVIDIA Jetson Orin as a bounded embedded
+target-validation check. The host used JetPack R36.4.3 on Ubuntu 22.04.5
+(aarch64), Python 3.13.13, NumPy 2.5.3, and SciPy 1.18.1. This was the same
+200-frame, 20-warm-up estimator benchmark used for the Mac reference, with the
+full-quality stressed profile. The implementation is CPU-only; CUDA and
+TensorRT were visible on the device but were not used by the code.
+
+| Estimator | Mac median [ms] | Jetson median [ms] | Jetson p99 [ms] | Jetson >1 ms |
+|---|---:|---:|---:|---:|
+| Centroid, cold | 0.055 | 0.485 | 0.544 | 0% |
+| Gaussian, warm | 1.819 | 10.482 | 13.458 | 100% |
+
+The seeded static and dynamic metrics matched the Mac reference to floating-
+point precision, including the SNR-10 RMSE values and 73 Hz disturbance
+recovery. The target run therefore validates portability of the scientific
+results, while showing that the Python Gaussian implementation has less timing
+margin on the Jetson. The result remains an estimator-only measurement and does
+not establish end-to-end camera or gimbal latency. The saved CSV, JSON, dynamic
+summary, and run manifest are in `results/performance/jetson_orin/`.
+
 ## 8. Dynamic tracking and disturbance recovery
 
 The final dynamic sequence contains 5,000 frames sampled at 1 kHz, giving a
@@ -645,6 +679,7 @@ calibrations for this exercise, not measurements of a deployed camera.
 | A-036 | Dynamic amplitude repeat uses five independent master seeds and 2,500 frames per seed at target SNR 10 | seeds, frames, dimensionless | Quantifies finite-record amplitude variation without replacing the primary 5,000-frame result | Gives uncertainty on the apparent amplitude bias; short records can weaken frequency recovery | Repeat outputs and Figure 6 |
 | A-037 | Sensor-chain validation includes a non-unity 2-electron/DN conversion-gain case | electrons/DN | Ensures the nominal 1-electron/DN choice does not mask unit-ordering errors | Separates charge-domain clipping from DN conversion | ADC conversion-gain test |
 | A-038 | GUI-only scene sweep uses independent beacon/background scaling with bounded exposure and simplified analog-gain response | dimensionless, ms, gain | Demonstrates the optional day/night exposure concept without changing authoritative experiments | Shows saturation recovery and low-light response qualitatively | Headless GUI test; interactive review only |
+| A-039 | Jetson Orin validation uses the CPU NumPy/SciPy implementation and the same 200-frame, 20-warm-up estimator benchmark as the Mac reference | frames, ms | Separates embedded-target portability evidence from the Mac reference while keeping the input contract paired | Measures platform-dependent estimator timing; does not cover camera, transfer, or gimbal latency | Jetson runtime/dynamic artifacts; machine-load dependent |
 
 \endgroup
 
@@ -672,6 +707,14 @@ generated files in
 [`results/latest/run_manifest.json`](results/latest/run_manifest.json).
 Seeded simulation outputs are deterministic; runtime measurements remain
 dependent on machine load and operating-system scheduling.
+
+The Mac record above is the authoritative reference run for the checked-in
+figures and seeded results. An additional target-validation run was completed
+on an NVIDIA Jetson Orin (JetPack R36.4.3, Ubuntu 22.04.5, aarch64, Python
+3.13.13, NumPy 2.5.3, SciPy 1.18.1). Its runtime and dynamic summary artifacts
+are preserved in `results/performance/jetson_orin/`. The two hosts produced the
+same seeded accuracy and dynamic metrics; only the machine-dependent estimator
+timing changed materially.
 
 The repository uses a standard Python virtual environment and requires NumPy,
 SciPy, Matplotlib, PyYAML, and pytest. The setup commands are documented in
@@ -755,7 +798,7 @@ rather than as a quantitative result.*
 | At least two centroiding methods | Section 3; estimator package | Implemented and characterized |
 | Bias and standard deviation versus SNR | Section 5; SNR experiment; characterization outputs | Complete; ideal and stressed figures saved |
 | Theoretical precision reference | Section 6; theory experiment; characterization outputs | Complete for clean reference model |
-| Per-frame compute cost and 1 kHz tradeoff | Section 7; runtime experiment; runtime outputs | Complete Python baseline |
+| Per-frame compute cost and 1 kHz tradeoff | Section 7; runtime experiment; Mac reference and Jetson target-validation outputs | Complete estimator-only Python baseline; end-to-end hardware latency remains out of scope |
 | Configurable Gaussian tracking speed study | Section 7.1; fast-Gaussian profile; performance outputs | Complete supplemental benchmark; fast profile remains optional |
 | Estimator ranking ablation | Section 5.1; ablation experiment; ablation outputs | Complete; controlled causal comparison at SNR 1 and 3 |
 | Moving spot with drift, jitter, and periodic disturbance | Section 8; trajectory and dynamic experiment | Complete; 5,000-frame OU sequence saved |
@@ -773,8 +816,8 @@ rather than as a quantitative result.*
 
 ## 13. Current limitations and next steps
 
-The static characterization, Python runtime benchmark, and dynamic tracking
-phases are complete.
+The static characterization, Python runtime benchmark, dynamic tracking, and
+Jetson target-validation phases are complete.
 The characterization provides the quantitative evidence needed to compare
 estimators, select ROI settings, identify SNR regimes, expose lock-loss modes,
 and compare clean empirical precision with a Fisher-information reference.
@@ -798,9 +841,8 @@ reference for the quantized and clipped likelihood; replace the GUI-only
 exposure/gain demonstration with a calibrated hardware-facing controller;
 add a physically separate beam-wander process; model motion blur and
 rolling-shutter timing; and validate the noise model against camera
-calibration frames. A compiled or vectorized Gaussian implementation
-should be benchmarked on the Jetson Orin or a representative FPGA/embedded
-target. A hardware-in-the-loop test would measure the currently unmeasured
-camera-to-gimbal latency budget, including exposure, readout, transfer,
-filtering, and actuation. These are deliberate extensions rather than
-required gaps in the submitted simulator study.
+calibration frames. The Jetson result motivates a compiled or vectorized
+Gaussian implementation and a hardware-in-the-loop test to measure the
+currently unmeasured camera-to-gimbal latency budget, including exposure,
+readout, transfer, filtering, and actuation. These are deliberate extensions
+rather than required gaps in the submitted simulator study.
