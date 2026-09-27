@@ -1,9 +1,9 @@
 """Configuration and scenario profiles for the spot-localization study.
 
 The configuration deliberately separates physical sensor parameters from
-experiment parameters.  The simulator will use total spot flux in electrons
-as its physical brightness input; experiments expose target SNR values and
-will calibrate them to flux in a later phase.
+experiment parameters. The simulator uses total spot flux in electrons as
+its physical brightness input; experiments expose target SNR values and
+calibrate them to flux through the reference-spot convention.
 """
 
 from __future__ import annotations
@@ -137,6 +137,8 @@ class EstimatorConfig:
     gaussian_irls_iterations: int = 2
     gaussian_variance_floor_dn2: float = 1.0
     optimizer_max_nfev: int = 100
+    gaussian_tracking_use_previous_roi: bool = False
+    gaussian_skip_centroid_with_previous: bool = True
 
     def validate(self) -> None:
         for name, size in (

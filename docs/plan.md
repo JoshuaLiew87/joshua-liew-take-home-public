@@ -33,6 +33,13 @@ The final repository must provide:
 - A report that states assumptions and limitations explicitly.
 - A report-level assumption register and assignment traceability matrix showing where every required item is addressed.
 
+Supplemental explanation checks are part of the final review run: a small
+controlled ablation at SNR 1 and 3 to explain any estimator-ranking reversal,
+a multi-seed repeat to quantify disturbance-amplitude variation, and a
+non-unity electrons/DN sensor-chain test. These checks support the report's
+interpretation but do not replace the primary static or five-second dynamic
+results.
+
 The submission will deliberately distinguish a clean theoretical reference from a stressed sensor scenario. A CRLB derived for an ideal continuous-valued model will not be presented as an exact bound for clipped, quantized, hot-pixel-contaminated data.
 
 ## 3. Design principles
@@ -129,7 +136,6 @@ transcelestial-spot-localization/
 │   ├── dynamic_tracking.py
 │   └── live_gui.py
 ├── tests/
-├── figures/
 ├── results/
 ├── report.md
 └── docs/
@@ -160,7 +166,10 @@ The sensor model must define these units explicitly:
 - full-well capacity in electrons;
 - ADC saturation level of `2**bit_depth - 1` DN.
 
-Read noise is added in electrons before conversion to DN. Quantization and ADC clipping are applied at the end of the sensor chain.
+Read noise is added in electrons before conversion to DN. The full-well and
+ADC limits are applied as an equivalent charge-domain clip before conversion;
+round-to-nearest quantization and the final DN-range clamp are applied after
+conversion.
 
 ## 6. Phase 0: foundations and quantitative conventions
 
@@ -223,7 +232,7 @@ Derive a Fisher-information reference for the pixel-integrated forward model. Th
 
 For the clean Poisson-plus-read-noise approximation, compute the expected pixel means and their derivatives. Include nuisance parameters in the Fisher matrix and use the inverse or Schur complement to obtain the position covariance bound.
 
-The report and `theory/crlb.py` should explain:
+The report and `experiments/theory.py` should explain:
 
 1. the likelihood/noise approximation;
 2. the expected pixel mean;
@@ -265,9 +274,10 @@ Use this documented simplified sensor chain:
 3. Draw one Poisson realization of the total expected photocharge and dark charge.
 4. Represent hot pixels as fixed locations with elevated dark-current means or fixed additive offsets, with the choice stated explicitly.
 5. Add independent Gaussian read noise in electrons.
-6. Apply electrons-to-DN conversion.
-7. Clip at full well and ADC limits.
-8. Quantize to the configured bit depth.
+6. Combine full-well and ADC limits into an equivalent charge limit and clip
+   the charge in electrons.
+7. Apply electrons-to-DN conversion.
+8. Quantize to the configured bit depth and clamp to the final DN range.
 
 The exact PRNU convention will be recorded in `decisions.md`; the important requirement is that the same convention is used by the simulator, tests, and report.
 
@@ -379,8 +389,7 @@ correlation, CSV/JSON output, and bias/precision/RMSE/lock-loss plots.
 reference and `experiments/roi_sensitivity.py` evaluates the candidate ROI
 sizes. The final ideal and stressed sweeps use 1,000 trials per SNR point; the
 stressed ROI study uses 200 trials at representative SNR values. The artifacts
-and their interpretation are recorded in `report.md`, so Phase 3 is
-complete and Phase 4 is the next execution phase.
+and their interpretation are recorded in `report.md`; Phase 3 is complete.
 
 ## 10. Phase 4: real-time measurement
 
@@ -410,6 +419,27 @@ NumPy, SciPy, and platform versions. The initial 200-frame SNR-10 benchmark
 has been run for both ideal and stressed profiles; final interpretation is
 documented in `report.md`.
 
+### Phase 4 follow-up: configurable Gaussian tracking speed study
+
+Keep the acquisition-quality Gaussian defaults unchanged, but expose the
+performance-sensitive choices in `EstimatorConfig`: Gaussian ROI size, IRLS
+pass count, optimizer evaluation limit, previous-position ROI placement, and
+whether centroid reinitialization is skipped when a previous fit is valid.
+The optional `configs/fast_gaussian.yaml` profile uses a 13 × 13 ROI, one IRLS
+pass, a 30-evaluation limit, and tracking-mode reuse of the previous estimate.
+
+Benchmark both configurations on a sequential dynamic trajectory in addition
+to the fixed-position acquisition benchmark. Report the two input contracts
+separately because a warm start on an acquisition benchmark does not answer
+the same question as a warm start on consecutive tracking frames. Validate
+the fast profile against accuracy, lock loss, p95/p99 latency, and worst-case
+time before considering any default change.
+
+Follow-up checkpoint: the fast profile is reproducible from the benchmark
+module, its raw JSON/CSV outputs are saved, and the report states whether the
+reduced configuration meets a useful latency margin rather than only its
+median time.
+
 ## 11. Phase 5: dynamic tracking
 
 ### 11.1 Scenario
@@ -430,8 +460,8 @@ The final trajectory will contain:
   detectable, ideally comparable to the localization noise or jitter rather
   than overwhelmingly large.
 
-The discrete OU drift should expose a stationary RMS, correlation time, and
-soft or hard position bounds. Its random seed must be saved with the dynamic
+The discrete OU drift should expose a nominal stationary RMS before any hard
+bound, correlation time, and position bounds. Its random seed must be saved with the dynamic
 scenario. The current GUI and early sanity checks may retain the bounded
 sinusoidal drift because it makes the direction and scale of motion easy to
 inspect, but the final report must identify it as a sanity mode rather than
@@ -468,7 +498,8 @@ disturbance using a Hann-windowed FFT followed by sinusoidal least-squares
 refinement. The `dynamic` profile uses the final OU/AR(1) drift parameters
 recorded in the report. The 73 Hz frequency and 0.05-pixel amplitude were
 recovered with zero estimator failures and zero lock loss at SNR 10; the
-trajectory and spectrum figure are saved under `figures/`.
+trajectory and spectrum figure is saved under the run's `figures/` directory
+and copied to `results/latest/figures/`.
 
 ## 12. Phase 6: real-world conditions analysis
 
@@ -506,7 +537,7 @@ characterization, theory, runtime, dynamic tracking, report, and
 `run_all.py` workflow are complete. The GUI is a demonstration layer, not a
 replacement for the reproducible experiments required by the assignment.
 
-Implement `experiments/live_gui.py` using the production simulator,
+The implemented `experiments/live_gui.py` uses the production simulator,
 estimators, and shared trajectory generator. The live display should provide:
 
 - SNR control;
@@ -611,100 +642,38 @@ The report should follow the assignment order where practical: baseline simulato
 
 Maintain a concise decision log containing each non-obvious choice, its justification, and its consequence. Examples include coordinate convention, SNR definition, conversion gain, hot-pixel model, CRLB assumptions, ROI policy, optimizer bounds, trajectory parameters, and frequency-analysis method. Assign stable IDs such as `A-001`, `A-002`, and so on, so the final report can reference every assumption consistently.
 
-## 17. One-week execution schedule
+## 17. Execution and completion status
 
-### Day 1 — Repository and foundations
+The implementation is organized by technical phase rather than a fixed
+calendar schedule. This reflects the actual workflow: foundational simulator
+work was validated first, followed by estimator development, quantitative
+characterization, runtime and dynamic analysis, robustness analysis, optional
+GUI work, and final integration. Work within a phase may overlap when results
+expose a needed correction in an earlier phase.
 
-- Create the modular package layout and configuration objects.
-- Define units, coordinates, RNG policy, output format, and scenario profiles.
-- Implement/test the pixel-integrated Gaussian PSF.
-- Write the initial assumptions and decision log.
-- Update the report's conventions and simulator-method sections, the assumption register, and the traceability matrix.
+### Phase status
 
-Checkpoint: a noiseless expected image can be generated at arbitrary sub-pixel coordinates, with flux and coordinate conventions tested.
+| Phase | Scope | Status and evidence |
+|---|---|---|
+| Foundations and simulator | Units, coordinates, pixel-integrated PSF, sensor/noise chain, SNR calibration, and reproducibility | Complete; `sim/`, `config.py`, foundation tests, and saved manifests |
+| Estimators | Windowed background-subtracted centroid and pixel-integrated Gaussian fit with analytical Jacobian | Complete; `estimators/`, estimator tests, and static characterization |
+| Theory and static characterization | Fisher-information reference, Monte Carlo SNR sweeps, error bars, lock-loss analysis, ROI sensitivity, and ranking ablation | Complete; `experiments/theory.py`, `experiments/characterize_snr.py`, and `experiments/estimator_ablation.py` |
+| Runtime analysis | Fixed-position and sequential timing, tail latency, warm starts, and optional fast Gaussian configuration | Complete supplemental benchmark; the Python Gaussian fit remains above the deterministic 1 ms target |
+| Dynamic tracking | Bounded OU drift, correlated jitter, periodic disturbance, trajectory recovery, frequency/amplitude analysis, and multi-seed amplitude repeat | Complete; `experiments/dynamic_tracking.py` and `experiments/dynamic_repeats.py` |
+| Real-world analysis | Scintillation, background, defocus, saturation, outdoor failure modes, and mitigations | Complete analysis with selected controlled stress experiments |
+| Live GUI | Optional review demonstration using the production simulator and estimators | Implemented; display-only and not authoritative for 1 kHz claims |
+| Final integration | YAML-configured `run_all.py`, manifest, report, PDF, README, tests, and traceability | Complete; the latest audited run generated the final result set and the full test suite passes |
 
-### Day 2 — Sensor simulator
+The reproducible submission commands are:
 
-- Implement the configurable noise/sensor chain.
-- Implement persistent PRNU, dark-current, and hot-pixel maps.
-- Calibrate the SNR control and check ADC/full-well feasibility.
-- Add simulator and noise-statistics tests.
-- Add and verify the simulator visual sanity-check command.
-- Update the report's sensor-model and SNR sections, record all noise-model assumptions, and update the README with the environment/configuration workflow.
+```bash
+python run_all.py --config configs/final.yaml
+python -m pytest -q
+```
 
-Checkpoint: clean and stressed frames can be generated reproducibly, and the effective configuration is saved.
-
-### Day 3 — Estimators
-
-- Implement common detection/ROI/quality-flag behavior.
-- Implement the background-corrected centroid.
-- Implement the bounded pixel-integrated Gaussian fit with an analytical Jacobian.
-- Run a small pilot sweep and fix initialization or failure problems.
-- Update the report's estimator-method sections, record estimator and ROI decisions, and add the estimator requirements to the traceability matrix.
-
-Checkpoint: both estimators work on clean frames and explicitly report invalid results on failure.
-
-Phase 2 implementation checkpoint: `estimators/common.py` provides the shared
-peak/ROI/background contract; `estimators/centroid.py` provides the windowed
-centroid; and `estimators/gaussian_fit.py` provides the bounded,
-pixel-integrated Gaussian fit. The current estimator tests cover clean
-sub-pixel recovery, empty-frame failures, saturation masking, and analytical
-Jacobian agreement with finite differences. Static characterization is still
-required before making accuracy or runtime claims.
-
-### Day 4 — Theory and static characterization
-
-- Implement the clean Fisher-information reference.
-- Run the pilot SNR sweep.
-- Run the final Monte Carlo sweep, pixel-phase study, and ROI-sensitivity check.
-- Generate bias, standard-deviation, RMSE, failure-rate, and CRLB plots.
-- Update the report with the theory derivation and measured static results, record trial/SNR/error-bar assumptions, and link each generated figure/result in the traceability matrix.
-
-Checkpoint: the central comparison is complete and its conclusions are supported by numbers.
-
-### Day 5 — Runtime and dynamic experiment
-
-- Benchmark cold and warm estimator paths with percentile timings.
-- Implement the correlated-drift dynamic trajectory and sequence renderer;
-  use 2,000 frames initially and extend to 5,000 for the final run only if
-  useful and affordable. Keep the deterministic sinusoidal mode available for
-  GUI/sanity comparisons.
-- Recover the trajectory and estimate the periodic disturbance.
-- Generate the trajectory, error, and spectrum plots.
-- Update the report with timing and dynamic results, record trajectory/spectral-analysis assumptions, and save the effective scenario configuration with the results.
-
-Checkpoint: the complete baseline experiment runs end-to-end from a clean output directory.
-
-### Day 6 — Report and robustness analysis
-
-- Fill remaining gaps in the simulator, estimator, CRLB, and result explanations; this is a consolidation pass, not the first documentation pass.
-- Complete the real-world conditions table.
-- Add failure-mode discussion and limitations.
-- Add README reproduction instructions.
-- Complete the assumption register and assignment traceability matrix.
-- Only if the baseline is stable, add the latency-budget extension.
-
-Checkpoint: a reviewer can reproduce the results and understand why they look the way they do. Complete; the final integration is handled by `run_all.py`.
-
-### Day 7 — Final audit and live-review preparation
-
-- Run tests and `python run_all.py` from a clean checkout.
-- Check that no figure depends on stale files or hidden state.
-- Verify all plots have units, legends, trial counts, and error-bar definitions.
-- Review every value in `decisions.md`.
-- Confirm every material assumption appears in the report's assumption register.
-- Complete the assignment traceability matrix and verify that every requirement has an implementation/result or an explicit limitation.
-- Check that README, report, decision log, configuration metadata, and generated results agree with one another.
-- Prepare short explanations for the SNR definition, CRLB assumptions, estimator tradeoff, failure modes, and 1 kHz recommendation.
-- Freeze the final scenario and record the final environment details.
-- After the core audit is complete, run the post-core live GUI as an optional
-  review demonstration; do not let GUI work replace missing required results.
-
-Final integration checkpoint: `run_all.py` has been run with the production
-settings from a clean staging directory and from the repository. It generated
-24 declared result/figure files plus a manifest in both the timestamped run
-directory and `results/latest/`; the full test suite passes. Remaining work is
-review and submission preparation, not a new implementation phase.
+The first command generates the figures, numerical outputs, dynamic data,
+runtime measurements, and run manifest. The second verifies the implementation
+independently of the generated results.
 
 ## 18. Phase-gate rule
 

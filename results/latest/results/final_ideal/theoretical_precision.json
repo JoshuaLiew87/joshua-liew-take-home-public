@@ -14,6 +14,8 @@
       "gaussian_roi_size_px": 15,
       "gaussian_sigma_max_px": 5.0,
       "gaussian_sigma_min_px": 0.5,
+      "gaussian_skip_centroid_with_previous": true,
+      "gaussian_tracking_use_previous_roi": false,
       "gaussian_variance_floor_dn2": 1.0,
       "minimum_signal_dn": 1e-09,
       "optimizer_max_nfev": 100
@@ -90,51 +92,51 @@
   "roi_size_px": 15,
   "rows": [
     {
-      "crlb_radial_std_px": 0.5643139550468759,
-      "crlb_std_x_px": 0.39903022262908067,
-      "crlb_std_y_px": 0.3990302260346123,
+      "crlb_radial_std_px": 0.5643139557008953,
+      "crlb_std_x_px": 0.3990302233848922,
+      "crlb_std_y_px": 0.39903022620372386,
       "requested_snr": 1.0,
       "valid_phase_count": 64
     },
     {
-      "crlb_radial_std_px": 0.1881046506217447,
-      "crlb_std_x_px": 0.1330100740292961,
-      "crlb_std_y_px": 0.1330100740254279,
+      "crlb_radial_std_px": 0.18810465062903628,
+      "crlb_std_x_px": 0.13301007403154275,
+      "crlb_std_y_px": 0.1330100740334931,
       "requested_snr": 3.0,
       "valid_phase_count": 64
     },
     {
-      "crlb_radial_std_px": 0.05643139518880819,
-      "crlb_std_x_px": 0.039903022209814204,
-      "crlb_std_y_px": 0.03990302220983415,
+      "crlb_radial_std_px": 0.056431395188794316,
+      "crlb_std_x_px": 0.0399030222098236,
+      "crlb_std_y_px": 0.03990302220980514,
       "requested_snr": 10.0,
       "valid_phase_count": 64
     },
     {
-      "crlb_radial_std_px": 0.018810465062935714,
-      "crlb_std_x_px": 0.013301007403274353,
-      "crlb_std_y_px": 0.01330100740327461,
+      "crlb_radial_std_px": 0.018810465062936182,
+      "crlb_std_x_px": 0.013301007403274797,
+      "crlb_std_y_px": 0.013301007403274825,
       "requested_snr": 30.0,
       "valid_phase_count": 64
     },
     {
-      "crlb_radial_std_px": 0.005643139518880748,
-      "crlb_std_x_px": 0.003990302220982381,
-      "crlb_std_y_px": 0.003990302220982355,
+      "crlb_radial_std_px": 0.0056431395188807805,
+      "crlb_std_x_px": 0.003990302220982367,
+      "crlb_std_y_px": 0.003990302220982416,
       "requested_snr": 100.0,
       "valid_phase_count": 64
     },
     {
-      "crlb_radial_std_px": 0.001881046506292057,
-      "crlb_std_x_px": 0.0013301007403268025,
-      "crlb_std_y_px": 0.001330100740325952,
+      "crlb_radial_std_px": 0.0018810465062925256,
+      "crlb_std_x_px": 0.0013301007403273117,
+      "crlb_std_y_px": 0.0013301007403261056,
       "requested_snr": 300.0,
       "valid_phase_count": 64
     },
     {
-      "crlb_radial_std_px": 0.0005643139518987468,
-      "crlb_std_x_px": 0.0003990302221002838,
-      "crlb_std_y_px": 0.00039903022211128236,
+      "crlb_radial_std_px": 0.0005643139518916392,
+      "crlb_std_x_px": 0.0003990302220968128,
+      "crlb_std_y_px": 0.0003990302221047015,
       "requested_snr": 1000.0,
       "valid_phase_count": 64
     }

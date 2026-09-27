@@ -26,3 +26,15 @@ def test_runtime_benchmark_reports_cold_and_warm_paths() -> None:
         assert 0.0 <= summary.failure_rate <= 1.0
         assert 0.0 <= summary.deadline_miss_rate <= 1.0
         assert np.isfinite(summary.median_nfev) or summary.estimator == "centroid"
+
+
+def test_runtime_benchmark_supports_sequential_dynamic_frames() -> None:
+    summaries = run_runtime_benchmark(
+        scenario_config("dynamic"),
+        target_snr=10.0,
+        frame_count=5,
+        warmup_count=1,
+        sequence="dynamic",
+    )
+
+    assert all(summary.sequence == "dynamic" for summary in summaries)

@@ -15,6 +15,7 @@ from estimators.common import (
     extract_roi,
     failure_result,
     find_peak,
+    find_peak_in_roi,
     fit_background_plane,
 )
 
@@ -91,9 +92,21 @@ def estimate_gaussian(
     method = "pixel_integrated_gaussian"
     image = np.asarray(image_dn, dtype=float)
     saturation_limit = config.sensor.adc_max_dn if config.sensor.saturation_enabled else None
+    previous_is_valid = previous_position is not None and len(previous_position) == 2 and all(
+        np.isfinite(previous_position)
+    )
+    tracking_roi_used = previous_is_valid and config.estimator.gaussian_tracking_use_previous_roi
     try:
-        peak = find_peak(image, saturation_limit)
-        roi = extract_roi(image, peak.pixel_xy, config.estimator.gaussian_roi_size_px)
+        if tracking_roi_used:
+            tracking_center = (
+                int(round(float(previous_position[0]))),
+                int(round(float(previous_position[1]))),
+            )
+            roi = extract_roi(image, tracking_center, config.estimator.gaussian_roi_size_px)
+            peak = find_peak_in_roi(roi, saturation_limit)
+        else:
+            peak = find_peak(image, saturation_limit)
+            roi = extract_roi(image, peak.pixel_xy, config.estimator.gaussian_roi_size_px)
         background_coefficients, initial_background = fit_background_plane(
             roi,
             config.estimator.background_border_width_px,
@@ -114,15 +127,15 @@ def estimate_gaussian(
             valid_pixel_count=int(np.count_nonzero(valid)),
         )
 
-    centroid = estimate_centroid(image, config)
-    if previous_position is not None and len(previous_position) == 2 and all(
-        np.isfinite(previous_position)
-    ):
+    centroid = None
+    if previous_is_valid and config.estimator.gaussian_skip_centroid_with_previous:
         initial_position = (float(previous_position[0]), float(previous_position[1]))
-    elif centroid.success and centroid.position_xy is not None:
-        initial_position = centroid.position_xy
     else:
-        initial_position = peak.pixel_xy
+        centroid = estimate_centroid(image, config)
+        if centroid.success and centroid.position_xy is not None:
+            initial_position = centroid.position_xy
+        else:
+            initial_position = peak.pixel_xy
 
     signal_residual = np.maximum(roi.image_dn - initial_background, 0.0)
     initial_flux = float(np.sum(signal_residual))
@@ -241,6 +254,8 @@ def estimate_gaussian(
             "optimality": float(last_fit.optimality),
             "valid_pixel_count": int(np.count_nonzero(valid)),
             "saturated_pixel_count": int(np.count_nonzero(~valid & np.isfinite(roi.image_dn))),
+            "tracking_roi_used": bool(tracking_roi_used),
+            "centroid_initialization_used": bool(centroid is not None),
         },
     )
 

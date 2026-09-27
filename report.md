@@ -16,7 +16,7 @@ fit. The current implementation also includes a reproducible trajectory
 generator, a static Monte Carlo characterization runner, and an optional live
 visualization. At this checkpoint, the simulator, estimators, static
 characterization, runtime benchmark, and dynamic recovery analysis have been
-verified by 38 automated tests. The final `run_all.py` reproduction workflow
+verified by 43 automated tests. The final `run_all.py` reproduction workflow
 and real-world conditions analysis are complete. Runtime results
 are treated as a Python development baseline rather than a flight-hardware
 guarantee.
@@ -91,9 +91,18 @@ The sensor chain is applied in the following order:
 2. apply a persistent multiplicative PRNU gain map;
 3. sample the total expected charge using independent Poisson draws;
 4. add independent Gaussian read noise in electrons;
-5. convert electrons to DN;
-6. apply full-well and ADC clipping;
-7. apply round-to-nearest quantization when enabled.
+5. combine the full-well and ADC limits into an equivalent charge limit and
+   clip the charge in electrons;
+6. convert the clipped charge from electrons to DN;
+7. apply round-to-nearest quantization and the final DN-range clamp when
+   enabled.
+
+The conversion gain is explicit even though the nominal configuration uses
+1 electron/DN, so the numerical DN and electron values coincide in the main
+run. Full-well clipping and the ADC limit are both converted to an equivalent
+charge limit before conversion. A unit test repeats this check with a
+2-electron/DN gain and separate full-well and ADC limits; this prevents the
+nominal 1-electron/DN choice from hiding a unit-ordering error.
 
 The simulator's clipping mask records both high-side saturation and low-side
 negative excursions from additive read noise before ADC conversion. In the
@@ -168,6 +177,12 @@ are excluded when saturation is enabled. The implementation records optimizer
 cost, function evaluations, optimality, fitted width and flux, background
 coefficients, valid-pixel count, and saturation count.
 
+The fit retains an acquisition mode based on full-frame peak detection and a
+tracking mode that can reuse the previous estimate to place the ROI. The
+tracking mode can also skip the redundant centroid initialization. ROI size,
+IRLS pass count, optimizer iteration limit, and these tracking choices are
+configuration parameters rather than separate estimator implementations.
+
 This method uses more information than the centroid and can estimate the
 spot shape and background jointly. It is also more computationally expensive
 and can fail under low SNR, poor initialization, saturation, or model
@@ -176,7 +191,7 @@ quasi-MLE, rather than an exact likelihood for clipped and quantized data.
 
 ## 4. Verification of the current implementation
 
-The current test suite contains 38 tests. The tests are deterministic and
+The current test suite contains 43 tests. The tests are deterministic and
 use statistical tolerances where random sampling is involved. They cover:
 
 - pixel-integrated PSF flux conservation and symmetry;
@@ -278,14 +293,53 @@ those high-flux cases because saturated pixels were masked.
 | Stressed | 10 | 0.161 | 0.081 | 0.0% | 0.0% |
 | Stressed | 1000 | 4.154 | 0.009 | 100.0% | 0.0% |
 
+![Stressed-sensor localization characterization](docs/figures/final_sensor_characterization.png)
+
+*Figure 1. Bias, precision, radial RMSE, and lock-loss behavior across the
+SNR sweep for the stressed sensor profile. Error bars represent the finite-
+trial uncertainty described above.*
+
+### 5.1 Controlled explanation of the ranking reversal
+
+The clean and stressed rankings are not expected to be identical. A small
+controlled ablation was run at SNR 1 and 3 with 250 paired trials per
+condition. At SNR 1, the clean model produced lock-loss rates of 10.8% for
+the centroid and 28.8% for the Gaussian fit, whereas the full stressed model
+produced 95.6% and 89.2%, respectively. At SNR 3, the stressed rates were
+25.2% and 9.2%. These values reproduce the direction of the reversal in the
+1,000-trial sweep rather than treating it as a plotting artefact.
+
+The isolated effects identify the mechanism. At SNR 3, adding the planar
+background increased lock loss to 21.2% for the centroid and 9.2% for the
+Gaussian fit; adding PRNU and hot pixels gave 5.6% and 1.2%. Quantization and
+clipping alone were indistinguishable from the clean low-SNR result because
+the spot did not reach the ADC limit in that regime. The Gaussian fit is not
+universally more robust: at SNR 1 its nonlinear initialization and extra
+nuisance parameters make it less reliable in the clean photon-limited case,
+while under moderate contamination its fitted background plane and use of
+the full spot shape reduce the chance of accepting a noise/outlier-driven
+position. At severe low SNR both methods lose lock; the stressed Gaussian
+advantage is therefore a relative reduction in lock loss, not successful
+localization of most SNR-1 frames.
+
+The ablation also records Gaussian fit cost and estimator disagreement for
+each condition. Its machine-readable outputs are in
+`results/latest/results/estimator_ablation/`, with the summary figure below.
+
+![Controlled estimator ablation](docs/figures/estimator_ablation.png)
+
+*Figure 2. Controlled lock-loss and RMSE ablation at SNR 1 and 3. Colors
+identify sensor conditions; circles and squares identify centroid and
+Gaussian estimates.*
+
 ## 6. Theoretical precision reference
 
 A Fisher-information reference has been computed from the pixel-integrated
 forward model. The nuisance-parameter vector includes position, flux, width,
-and planar-background terms. The reference uses the clean Poisson-plus-read-
-noise approximation, a 15 × 15 evaluation ROI, and an 8 × 8 grid of
-sub-pixel phases. The x/y variances are averaged over phase before taking the
-square root.
+and planar-background terms. The reference uses a clean Poisson model with a
+configurable read-noise term, set to zero in the ideal profile, a 15 × 15
+evaluation ROI, and an 8 × 8 grid of sub-pixel phases. The x/y variances are
+averaged over phase before taking the square root.
 
 For the ideal profile, the resulting radial reference standard deviations are
 0.564 pixels at SNR 1, 0.0564 pixels at SNR 10, and 0.000564 pixels at SNR
@@ -298,6 +352,11 @@ quantization, saturation, hot-pixel contamination, and unmodeled optical or
 sensor effects will be treated as model mismatch rather than implicitly
 included in the clean bound.
 
+![Ideal-model characterization and CRLB reference](docs/figures/final_ideal_characterization.png)
+
+*Figure 3. Ideal-model estimator comparison with the Fisher-information
+precision reference.*
+
 ## 7. Real-time performance
 
 Runtime was measured on 200 already-generated frames at target SNR 10, with
@@ -308,24 +367,25 @@ Gaussian timing initialized from the previous estimate. It also records
 failure rate, 1 ms deadline misses, p95/p99 latency, and optimizer function
 evaluations.
 
-The measurements were obtained with Python 3.14.6, NumPy 2.5.1, SciPy 1.18.1
+The measurements were obtained with Python 3.13.1, NumPy 2.5.3, SciPy 1.18.1
 on the recorded macOS arm64 development system.
 
 | Profile | Estimator | Initialization | Median [ms] | p95 [ms] | p99 [ms] | Worst [ms] | >1 ms |
 |---|---|---|---:|---:|---:|---:|---:|
-| Ideal | Centroid | cold | 0.054 | 0.060 | 0.063 | 0.096 | 0% |
-| Ideal | Gaussian | cold | 1.880 | 2.097 | 2.277 | 2.385 | 100% |
-| Ideal | Gaussian | warm | 1.980 | 2.751 | 6.865 | 7.841 | 100% |
-| Stressed | Centroid | cold | 0.057 | 0.104 | 0.146 | 0.233 | 0% |
-| Stressed | Gaussian | cold | 2.047 | 2.391 | 2.561 | 2.655 | 100% |
-| Stressed | Gaussian | warm | 2.021 | 2.234 | 2.470 | 2.538 | 100% |
+| Ideal | Centroid | cold | 0.056 | 0.070 | 0.115 | 0.143 | 0% |
+| Ideal | Gaussian | cold | 1.795 | 1.992 | 2.147 | 2.274 | 100% |
+| Ideal | Gaussian | warm | 1.757 | 1.992 | 2.128 | 2.175 | 100% |
+| Stressed | Centroid | cold | 0.057 | 0.070 | 0.079 | 0.119 | 0% |
+| Stressed | Gaussian | cold | 1.988 | 2.259 | 2.482 | 2.597 | 100% |
+| Stressed | Gaussian | warm | 1.922 | 2.356 | 5.867 | 6.555 | 100% |
 
 The centroid is comfortably below the nominal 1 ms estimator budget in this
 Python benchmark. The Gaussian fit is more accurate in many clean and
 stressed regimes, but its Python implementation does not meet a 1 kHz budget
 on this machine. Warm-starting reduced the median stressed latency slightly
-but did not meet the budget and produced a larger ideal-profile tail. It is
-therefore not treated as a guaranteed optimization.
+but did not meet the budget. The tail is sensitive to machine load, with the
+latest stressed warm-start p99 reaching 5.87 ms, so it is not treated as a
+guaranteed optimization.
 
 These measurements exclude camera transfer, image acquisition,
 preprocessing, synchronization, filtering, and gimbal output. They are a
@@ -334,12 +394,55 @@ A deployed implementation would likely use compiled C/C++ or dedicated FPGA
 logic, with the centroid as the natural low-latency baseline and the Gaussian
 fit reserved for slower supervisory, calibration, or high-confidence modes.
 
+![Estimator runtime benchmark](docs/figures/runtime_sensor.png)
+
+*Figure 4. Sensor-profile estimator latency and 1 ms deadline misses. The
+benchmark is an estimator-only Python measurement on the development machine.*
+
+### 7.1 Sequential tracking-mode speed study
+
+The primary runtime table above is an acquisition-style benchmark: frames are
+generated before timing at one fixed sub-pixel position, with independent
+sensor noise. It therefore measures estimator cost without conflating it with
+trajectory generation, but it is not a complete test of warm-start behavior
+on a moving target.
+
+A supplementary 200-frame benchmark uses consecutive frames from the dynamic
+trajectory. The baseline retains the 15 × 15 ROI and two IRLS passes. The fast
+configuration uses a 13 × 13 ROI, one IRLS pass, a 30-evaluation optimizer
+limit, previous-position ROI placement, and skips centroid initialization when
+the previous fit is valid.
+
+| Sequential configuration | Estimator | Initialization | Median [ms] | p95 [ms] | p99 [ms] | Worst [ms] |
+|---|---|---|---:|---:|---:|---:|
+| Baseline | Gaussian | cold | 1.946 | 2.143 | 2.300 | 2.335 |
+| Baseline | Gaussian | warm | 1.814 | 2.073 | 2.152 | 2.266 |
+| Fast tracking | Gaussian | cold | 1.035 | 1.201 | 1.312 | 1.356 |
+| Fast tracking | Gaussian | warm | 0.972 | 1.147 | 1.260 | 1.300 |
+
+The reduced configuration cuts median Gaussian latency by approximately 46%
+and makes the warm median slightly less than 1 ms, but its tail still exceeds
+the 1 ms budget. It is therefore a useful tracking-mode experiment, not
+evidence that the Python fit is deterministic at 1 kHz. A production system
+would still reserve the centroid for the hard real-time path or port the fit
+to compiled/vectorized embedded code.
+
+![Sequential fast-Gaussian tracking benchmark](docs/figures/runtime_tracking_fast.png)
+
+*Figure 5. Sequential dynamic-frame benchmark for the configurable fast
+Gaussian tracking mode.*
+
+The raw sequential benchmark files are retained in
+`results/performance/gaussian_tracking_baseline/` and
+`results/performance/gaussian_tracking_fast/`.
+
 ## 8. Dynamic tracking and disturbance recovery
 
 The final dynamic sequence contains 5,000 frames sampled at 1 kHz, giving a
 5-second record and 0.2 Hz FFT-bin spacing. The target reference SNR is 10.
-The trajectory uses a discrete Ornstein–Uhlenbeck drift with stationary RMS
-0.6 pixels, correlation time 0.25 seconds, and ±2-pixel drift bounds. The
+The trajectory uses a discrete Ornstein–Uhlenbeck drift with nominal
+stationary RMS 0.6 pixels before the explicit bound, correlation time 0.25
+seconds, and ±2-pixel drift bounds. The
 independent jitter has 0.04-pixel RMS and correlation coefficient 0.95. One
 73 Hz sinusoidal disturbance with 0.05-pixel amplitude is injected on the x
 axis. The same persistent sensor maps and rendered frames are passed to both
@@ -372,15 +475,41 @@ trajectory error and a stronger recovered spectral peak, at the cost of the
 runtime measured in Section 7. The recovered amplitudes are slightly above
 the injected value, which is expected for a finite noisy record and is
 reported rather than corrected away. The result is shown in
-[`dynamic_tracking.png`](results/latest/figures/dynamic_tracking.png), and the
+[`dynamic_tracking.png`](docs/figures/dynamic_tracking.png), and the
 per-frame trajectory plus summary files are saved under
 `results/latest/results/dynamic/`.
+
+The primary five-second record contains one realization, so the apparent
+positive amplitude errors (0.0063 and 0.0065 pixel) should not be read as a
+calibrated systematic bias. A separate five-seed repeat used shorter
+2,500-frame records to quantify repeatability. The mean recovered Gaussian
+amplitude was 0.05265 ± 0.00649 pixel (sample standard deviation), giving a
+mean bias of +0.00265 ± 0.00290 pixel (standard error of the mean). This is
+consistent with a small positive magnitude-estimation effect within the
+finite-record variation, but does not establish a deterministic 13% bias.
+The centroid repeat had a mean amplitude of 0.04899 ± 0.00953 pixel and was
+less reliable for frequency identification in the shorter records. The
+primary 5,000-frame result remains the frequency-recovery reference.
+
+The repeat outputs are saved under
+`results/latest/results/dynamic_repeats/` and the amplitude summary is shown
+below.
+
+![Multi-seed dynamic amplitude repeat](docs/figures/dynamic_amplitude_repeats.png)
+
+*Figure 6. Five-seed amplitude repeat. Error bars show between-seed sample
+standard deviation; the dashed line is the injected amplitude.*
 
 The dynamic figure contains the true and recovered trajectories, radial
 tracking error, and the Hann-windowed disturbance spectrum. It also annotates
 the injected and recovered disturbance frequency and amplitude, while the CSV
 and JSON outputs retain the per-frame estimates and the numerical recovery
 metrics used in the table above.
+
+![Dynamic trajectory and disturbance recovery](docs/figures/dynamic_tracking.png)
+
+*Figure 7. True and recovered motion, radial tracking error, and recovered
+periodic disturbance.*
 
 ## 9. Outdoor conditions and robustness
 
@@ -457,7 +586,12 @@ The controlled results are saved in
 [`real_world_conditions.csv`](results/latest/results/real_world/real_world_conditions.csv)
 and [`real_world_conditions.json`](results/latest/results/real_world/real_world_conditions.json),
 with the comparison figure in
-[`real_world_conditions.png`](results/latest/figures/real_world_conditions.png).
+[`real_world_conditions.png`](docs/figures/real_world_conditions.png).
+
+![Controlled outdoor-condition stress comparison](docs/figures/real_world_conditions.png)
+
+*Figure 8. Quantified estimator behavior under selected outdoor-condition
+stress cases.*
 
 ## 10. Assumptions and limitations
 
@@ -480,27 +614,55 @@ calibrations for this exercise, not measurements of a deployed camera.
 | A-011 | Read noise is additive Gaussian noise in electrons; quantization rounds to nearest DN | electrons RMS, DN | Standard simplified readout model | Controls low-light behavior | Noise and ADC tests |
 | A-012 | Reference SNR uses a pixel-centered spot; effective SNR is also recorded | dimensionless | Avoids phase-dependent SNR labels | Separates sweep control from actual frame information | SNR tests and metadata |
 | A-013 | Stressed sigma variation is 5% RMS about 1.75 pixels | pixels | Represents modest optical variation | Produces model mismatch | Frame metadata; later sensitivity study |
-| A-014 | Default stressed parameters are 1% PRNU, 50 electrons/s dark current, four 5,000-electron/s hot pixels, 3-electron read noise, 12-bit ADC, and 1 electron/DN | mixed | Controlled engineering assumptions | Sets stress and saturation regime | Later sensitivity study |
+| A-014 | Default stressed parameters are 1% PRNU, 50 electrons/s dark current, four 5,000-electron/s hot pixels, 3-electron read noise, 12-bit ADC, and 1 electron/DN | mixed | Controlled engineering assumptions | Sets stress and saturation regime | Final sweep, ROI study, and controlled outdoor analysis |
 | A-015 | Major noise effects have independent switches | — | Enables ablation studies | Supports causal diagnosis | Toggle tests |
 | A-016 | The visual sanity tool reuses the production simulator | — | Prevents a second visualization model | Improves debugging confidence | Headless figure generation |
 | A-017 | Both estimators use full-frame peak detection and local odd-sized ROIs; defaults are 13 × 13 and 15 × 15 | pixels | Provides a fair input contract | Affects bias, variance, and runtime | Estimator tests; stressed ROI sensitivity study |
-| A-018 | Centroid background is fitted on the ROI border; negative residuals are clipped | DN, pixels | Handles the nominal background gradient | Can remove weak PSF tails | Clean test; sensitivity study pending |
+| A-018 | Centroid background is fitted on the ROI border; negative residuals are clipped | DN, pixels | Handles the nominal background gradient | Can remove weak PSF tails | Clean test and ROI-sensitivity study |
 | A-019 | The Gaussian fit estimates position, flux, width, and planar background with the pixel-integrated model | DN, pixels | Matches the simulator and estimates nuisance terms | Model mismatch affects bias and convergence | Jacobian and clean-fit tests |
 | A-020 | Gaussian fitting uses bounded least squares, two IRLS steps, ADC-limit masking, and a configurable 1 DN² variance floor | mixed | Controls optimizer behavior and prevents extreme tail-pixel weights | Approximate weighting affects stressed results | Jacobian and saturation tests |
 | A-021 | The GUI reuses the production simulator, trajectory generator, and estimators | — | Keeps the demonstration consistent | GUI is not authoritative scientific output | Headless GUI test |
 | A-022 | GUI display timing defaults to 50 ms and is not a 1 kHz benchmark | ms, Hz | Makes the display usable | Separates visualization from latency evidence | Dedicated runtime benchmark complete |
 | A-023 | The GUI sanity mode uses 1.5-pixel, 0.4-Hz sinusoidal drift, 0.04-pixel correlated jitter, and a 0.05-pixel 73-Hz disturbance | pixels, Hz | Provides an easily inspected deterministic motion mode | It is not the final stochastic dynamic model | Trajectory reproducibility test |
-| A-024 | The final dynamic drift is a discrete OU/AR(1) process with 0.6-pixel stationary RMS, 0.25-second correlation time, ±2-pixel drift bounds, and the saved master seed | pixels, s | Avoids unbounded Brownian drift and isolates one intentional periodic disturbance | Drift statistics affect recovery and spectral analysis | 5,000-frame dynamic sequence |
+| A-024 | The final dynamic drift is a discrete OU/AR(1) process with nominal 0.6-pixel stationary RMS before bounding, 0.25-second correlation time, ±2-pixel drift bounds, and the saved master seed | pixels, s | Avoids unbounded Brownian drift and isolates one intentional periodic disturbance | Drift statistics affect recovery and spectral analysis | 5,000-frame dynamic sequence |
 | A-025 | Static SNR sweeps reuse trial positions and fixed-pattern maps across SNR values, and both estimators process the same rendered frames | — | Reduces avoidable Monte Carlo comparison variance | Makes estimator comparisons more paired and reproducible | Final ideal and stressed sweeps |
 | A-026 | Gaussian IRLS uses a configurable 1 DN² lower bound on approximate Poisson/read-noise variance | DN² | Prevents extreme weights from tiny or negative fitted tail-background values | Changes approximate fit weighting in low-signal tails | Final sweeps; likelihood remains approximate |
 | A-027 | Runtime frames are generated before timing; 20 warm-up calls are excluded; centroid cold and Gaussian cold/warm paths are timed against a 1 ms interval | ms, frames | Separates estimator execution from simulation and initialization overhead | Determines reported latency and deadline-miss rates | 200-frame ideal and stressed benchmark |
-| A-028 | The final dynamic record uses 5,000 frames at 1 kHz, 0.04-pixel correlated jitter, a 73 Hz/0.05-pixel x-axis disturbance, Hann-windowed spectral analysis, and a 20 Hz lower search limit | frames, Hz, pixels | Provides frequency resolution while separating slow OU drift from the intentional disturbance | Analysis results depend on windowing, search band, and finite-record noise | Dynamic recovery output and 38-test suite |
+| A-028 | The final dynamic record uses 5,000 frames at 1 kHz, 0.04-pixel correlated jitter, a 73 Hz/0.05-pixel x-axis disturbance, Hann-windowed spectral analysis, and a 20 Hz lower search limit | frames, Hz, pixels | Provides frequency resolution while separating slow OU drift from the intentional disturbance | Analysis results depend on windowing, search band, and finite-record noise | Dynamic recovery output and 43-test suite |
 | A-029 | Phase 6 controlled stress cases use 300 paired trials at reference SNR 10, a 1-pixel lock-loss threshold, and fixed nominal photon flux for background/defocus comparisons | frames, dimensionless, pixels | Makes outdoor-condition effects measurable without silently restoring baseline SNR | Results are finite-sample engineering evidence, not field validation | `results/latest/results/real_world/real_world_conditions.csv` and reproducibility test |
 | A-030 | Scintillation is a mean-one correlated log-normal flux multiplier with log-intensity RMS 0.5 and lag-one correlation 0.95 | dimensionless | Captures temporal intensity modulation while preserving the distinction between flux variation and beam wander | Changes effective SNR and can create intermittent lock loss | Controlled Phase 6 experiment; atmospheric statistics are not measured |
 | A-031 | The controlled outdoor study uses PSF sigma 2.4 pixels for defocus, a 200-electron/pixel bright background with 1.5/-1.0 electron/pixel gradients, and 100x nominal flux for saturation | pixels, electrons, electrons/pixel, multiplier | Provides interpretable stress levels within the existing sensor model | Quantifies sensitivity to width, background, and clipping; does not model blooming or optical halos | Saved condition metadata and figure |
 | A-032 | GUI keyboard demonstrations are display-only; manual nudges are 0.1 pixels, flux presets use SNR 1 and 1,000, and the forced hot pixel is fixed at a Gaussian-ROI edge | pixels, dimensionless | Makes phase, saturation, gradient, and outlier behavior easy to demonstrate during review without changing reproducible experiments | Interactive behavior is illustrative and depends on figure focus | GUI shortcut test; offline results remain authoritative |
+| A-033 | Fast Gaussian tracking uses a 13 × 13 ROI, one IRLS pass, a 30-evaluation optimizer limit, previous-position ROI placement, and previous-position initialization | pixels, passes, evaluations | Provides a configurable speed study without changing the full-quality acquisition defaults | Reduces latency but can increase model truncation, convergence, or tracking failure risk | Sequential runtime benchmark; not the production default |
+| A-034 | Acquisition and sequential tracking runtime benchmarks are reported separately | — | Prevents fixed-position estimator timing from being mistaken for deployed warm-start behavior | Makes warm-start conclusions conditional on input sequence | 200-frame fixed and dynamic benchmark artifacts |
+| A-035 | The ranking ablation uses 250 paired trials at SNR 1 and 3 for five conditions: ideal, background gradient, PRNU/hot pixels, quantization/saturation, and full stressed | trials, dimensionless | Separates low-SNR convergence effects from contamination and clipping effects | Provides evidence for the clean/stressed ranking reversal | `results/latest/results/estimator_ablation/` and Figure 2 |
+| A-036 | Dynamic amplitude repeat uses five independent master seeds and 2,500 frames per seed at target SNR 10 | seeds, frames, dimensionless | Quantifies finite-record amplitude variation without replacing the primary 5,000-frame result | Gives uncertainty on the apparent amplitude bias; short records can weaken frequency recovery | `results/latest/results/dynamic_repeats/` and Figure 6 |
+| A-037 | Sensor-chain validation includes a non-unity 2-electron/DN conversion-gain case | electrons/DN | Ensures the nominal 1-electron/DN choice does not mask unit-ordering errors | Separates charge-domain clipping from DN conversion | `test_adc_chain_respects_nonunity_electrons_per_dn` |
 
 ## 11. Reproducibility and implementation status
+
+### 11.1 Implementation details and reproducibility record
+
+The final figures and numerical outputs were regenerated under the `.venv`
+environment on the following development system:
+
+| Item | Recorded value |
+|---|---|
+| Host | MacBook Pro, model Mac15,6 |
+| Processor | Apple M3 Pro, 11 cores (5 performance, 6 efficiency) |
+| Memory | 18 GB |
+| Operating system | macOS 27.0, arm64 |
+| Python environment | `.venv`, Python 3.13.1 |
+| Core packages | NumPy 2.5.3; SciPy 1.18.1; Matplotlib 3.11.2; PyYAML 6.0.3; pytest 9.1.1 |
+| Final run | `20260927T072529Z` |
+| Experiment sizes | 1,000 static trials/SNR; 200 ROI trials; 200 runtime frames plus 20 warm-up calls; 5,000 dynamic frames; 300 outdoor-condition trials; 250 ablation trials/condition/SNR; five 2,500-frame amplitude repeats |
+| Reproduction command | `python run_all.py --config configs/final.yaml` |
+
+The run manifest records the configuration, software versions, seed, and
+generated files in
+[`results/latest/run_manifest.json`](results/latest/run_manifest.json).
+Seeded simulation outputs are deterministic; runtime measurements remain
+dependent on machine load and operating-system scheduling.
 
 The repository uses a standard Python virtual environment and requires NumPy,
 SciPy, Matplotlib, PyYAML, and pytest. The setup commands are documented in
@@ -533,8 +695,8 @@ reproduction workflow. The complete workflow is:
 python run_all.py --config configs/final.yaml
 ```
 
-It regenerates the final static, ROI, runtime, dynamic, and real-world
-outputs under a UTC timestamped directory in `results/runs/`, then refreshes
+It regenerates the final static, ROI, runtime, dynamic, ablation, repeat, and
+real-world outputs under a UTC timestamped directory in `results/runs/`, then refreshes
 `results/latest/` as a stable snapshot and writes its manifest. Runtime
 measurements are machine-load dependent; the seeded simulation products are
 deterministic. Optional YAML files such as `configs/final.yaml` provide
@@ -561,14 +723,16 @@ rather than claim automatic rejection by the Gaussian fit.
 | Bias and standard deviation versus SNR | Section 5; `experiments/characterize_snr.py`; characterization outputs | Complete; ideal and stressed figures saved |
 | Theoretical precision reference | Section 6; `experiments/theory.py`; characterization outputs | Complete for clean reference model |
 | Per-frame compute cost and 1 kHz tradeoff | Section 7; `experiments/benchmark_runtime.py`; runtime outputs | Complete Python baseline |
+| Configurable Gaussian tracking speed study | Section 7.1; `configs/fast_gaussian.yaml`; `results/performance/` | Complete supplemental benchmark; fast profile remains optional |
+| Estimator ranking ablation | Section 5.1; `experiments/estimator_ablation.py`; `results/latest/results/estimator_ablation/` | Complete; controlled causal comparison at SNR 1 and 3 |
 | Moving spot with drift, jitter, and periodic disturbance | Section 8; `sim/trajectory.py`; `experiments/dynamic_tracking.py` | Complete; 5,000-frame OU sequence saved |
 | Recovered trajectory error | Section 8; dynamic summary and trajectory outputs | Complete |
-| Recovered disturbance frequency and amplitude | Section 8; dynamic spectrum and summary outputs | Complete |
+| Recovered disturbance frequency and amplitude | Section 8; dynamic spectrum, summary, and multi-seed repeat outputs | Complete |
 | Challenging parameters and failure modes | Sections 3, 5, 8, 9, and 10 | Complete; controlled stress results and outdoor handling table included |
 | Outdoor real-world conditions and handling | Section 9; `experiments/real_world_conditions.py` | Complete analysis; selected effects quantified |
 | One-command reproducibility | Section 11; `run_all.py`; `results/latest/run_manifest.json` and `results/runs/` | Complete; production workflow verified |
 | Written report | This document | Complete through final integration; runtime caveat documented |
-| Reproducible dynamic scenario and analysis | Section 8; `results/latest/results/dynamic/` | Complete |
+| Reproducible dynamic scenario and analysis | Section 8; `results/latest/results/dynamic/` and `dynamic_repeats/` | Complete |
 | Optional live interactive demonstration | Section 11; `experiments/live_gui.py` | Implemented |
 
 ## 13. Current limitations and next steps
@@ -584,5 +748,22 @@ manifest confirms that all declared result and figure files were generated.
 
 The live GUI may be used during the review to illustrate behavior under
 different conditions, but conclusions will be based on reproducible saved
-experiments rather than interactive screenshots. The remaining work is the
-final submission review and live-review preparation.
+experiments rather than interactive screenshots.
+
+The full photon-to-position-to-gimbal latency budget was not implemented in
+this simulator-only study. Effort was deliberately allocated to the
+controlled outdoor-condition analysis, sequential estimator timing, dynamic
+disturbance recovery, and the optional live GUI. The report therefore treats
+end-to-end latency as an explicit scope limitation rather than implying that
+the estimator-only benchmark covers the complete control loop.
+
+With more time, the next technical steps would be to derive a Fisher
+reference for the quantized and clipped likelihood; add a physically
+separate beam-wander process; model motion blur and rolling-shutter timing;
+add automatic exposure/gain control; and validate the noise model against
+camera calibration frames. A compiled or vectorized Gaussian implementation
+should be benchmarked on the Jetson Orin or a representative FPGA/embedded
+target. A hardware-in-the-loop test would measure the currently unmeasured
+camera-to-gimbal latency budget, including exposure, readout, transfer,
+filtering, and actuation. These are deliberate extensions rather than
+required gaps in the submitted simulator study.

@@ -2,6 +2,7 @@
 # Omitted fields inherit from config.py and the named scenario profiles.
 
 pipeline:
+  master_seed: 20260925
   target_snr: 10.0
   static_trials: 1000
   roi_trials: 200
@@ -9,6 +10,10 @@ pipeline:
   runtime_warmup: 20
   dynamic_frames: 5000
   real_world_trials: 300
+  # Supplemental causal checks used to explain the main results.
+  ablation_trials: 250
+  dynamic_repeat_count: 5
+  dynamic_repeat_frames: 2500
 
 profiles:
   sensor:

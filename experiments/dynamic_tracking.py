@@ -327,7 +327,7 @@ def save_dynamic_results(
     for estimator in estimators:
         fieldnames.extend((f"{estimator}_x_px", f"{estimator}_y_px", f"{estimator}_error_px"))
     with trajectory_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for index, position in enumerate(result.positions_xy):
             row: dict[str, float | int] = {
@@ -360,7 +360,11 @@ def save_dynamic_results(
         },
     )
     with summary_csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(summary_rows[0].keys()))
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=list(summary_rows[0].keys()),
+            lineterminator="\n",
+        )
         writer.writeheader()
         writer.writerows(summary_rows)
     return trajectory_path, summary_json_path, summary_csv_path

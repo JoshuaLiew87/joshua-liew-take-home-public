@@ -1,0 +1,21 @@
+# Optional performance-study overrides.  The high-quality defaults remain in
+# configs/final.yaml; this profile makes Gaussian tracking cheaper to measure.
+
+pipeline:
+  master_seed: 20260925
+
+profiles:
+  sensor:
+    estimator:
+      gaussian_roi_size_px: 13
+      gaussian_irls_iterations: 1
+      optimizer_max_nfev: 30
+      gaussian_tracking_use_previous_roi: true
+      gaussian_skip_centroid_with_previous: true
+  dynamic:
+    estimator:
+      gaussian_roi_size_px: 13
+      gaussian_irls_iterations: 1
+      optimizer_max_nfev: 30
+      gaussian_tracking_use_previous_roi: true
+      gaussian_skip_centroid_with_previous: true

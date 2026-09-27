@@ -15,11 +15,14 @@ def test_run_pipeline_writes_declared_outputs(tmp_path: Path) -> None:
         dynamic_frames=200,
         real_world_trials=4,
         run_id="test-run",
+        master_seed=12345,
     )
 
     assert manifest["workflow"] == "run_all"
     assert manifest["parameters"]["static_trials"] == 4
     assert manifest["parameters"]["dynamic_frames"] == 200
+    assert manifest["seed"] == 12345
+    assert manifest["parameters"]["master_seed"] == 12345
     run_root = tmp_path / "results" / "runs" / "test-run"
     assert (run_root / "run_manifest.json").is_file()
     assert (tmp_path / "results" / "latest" / "run_manifest.json").is_file()

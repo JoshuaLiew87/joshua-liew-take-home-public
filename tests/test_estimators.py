@@ -104,3 +104,25 @@ def test_gaussian_fit_excludes_saturated_pixels() -> None:
 
     assert result.peak_pixel_xy is not None
     assert result.diagnostics.get("saturated_pixel_count", 0) > 0
+
+
+def test_gaussian_tracking_options_reuse_previous_position() -> None:
+    base = scenario_config("ideal")
+    config = replace(
+        base,
+        estimator=replace(
+            base.estimator,
+            gaussian_roi_size_px=13,
+            gaussian_irls_iterations=1,
+            gaussian_tracking_use_previous_roi=True,
+            gaussian_skip_centroid_with_previous=True,
+        ),
+    )
+    frame = SpotSimulator(config).render((15.25, 16.4), total_flux_e=10000.0, sigma_px=1.75)
+    first = estimate_gaussian(frame.image_dn, config)
+    assert first.success and first.position_xy is not None
+
+    second = estimate_gaussian(frame.image_dn, config, previous_position=first.position_xy)
+    assert second.success
+    assert second.diagnostics["tracking_roi_used"] is True
+    assert second.diagnostics["centroid_initialization_used"] is False

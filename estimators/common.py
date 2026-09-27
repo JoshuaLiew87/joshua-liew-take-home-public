@@ -63,6 +63,21 @@ def find_peak(image_dn: np.ndarray, saturation_limit_dn: float | None = None) ->
     return PeakDetection((int(x_index), int(y_index)), value, bool(saturated))
 
 
+def find_peak_in_roi(roi: ROI, saturation_limit_dn: float | None = None) -> PeakDetection:
+    """Find the brightest finite pixel in an already selected ROI."""
+
+    image = np.asarray(roi.image_dn, dtype=float)
+    finite = np.isfinite(image)
+    if not np.any(finite):
+        raise ValueError("ROI contains no finite pixels")
+    safe_image = np.where(finite, image, -np.inf)
+    y_index, x_index = np.unravel_index(int(np.argmax(safe_image)), image.shape)
+    value = float(image[y_index, x_index])
+    pixel_xy = (int(roi.x_coords[x_index]), int(roi.y_coords[y_index]))
+    saturated = saturation_limit_dn is not None and value >= float(saturation_limit_dn)
+    return PeakDetection(pixel_xy, value, bool(saturated))
+
+
 def extract_roi(image_dn: np.ndarray, center_xy: tuple[int, int], size_px: int) -> ROI:
     """Extract the largest centered odd-sized ROI that fits in the frame."""
 

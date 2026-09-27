@@ -151,6 +151,27 @@ def test_adc_quantization_and_saturation() -> None:
     )
 
 
+def test_adc_chain_respects_nonunity_electrons_per_dn() -> None:
+    base = scenario_config("sensor")
+    sensor = replace(
+        base.sensor,
+        electrons_per_dn=2.0,
+        full_well_e=7000.0,
+        quantization_enabled=False,
+    )
+    result = convert_to_adc(np.array([[6999.0, 7001.0, 8200.0]]), sensor)
+
+    np.testing.assert_allclose(result.image_dn, np.array([[3499.5, 3500.0, 3500.0]]))
+    np.testing.assert_array_equal(
+        result.saturated_mask, np.array([[False, True, True]])
+    )
+
+    adc_limited_sensor = replace(sensor, full_well_e=9000.0)
+    adc_limited = convert_to_adc(np.array([[8191.0]]), adc_limited_sensor)
+    np.testing.assert_allclose(adc_limited.image_dn, np.array([[4095.0]]))
+    np.testing.assert_array_equal(adc_limited.saturated_mask, np.array([[True]]))
+
+
 def test_noise_switches_can_disable_stochastic_components() -> None:
     base = scenario_config("sensor")
     deterministic = replace(

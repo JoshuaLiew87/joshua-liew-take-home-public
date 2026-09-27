@@ -37,6 +37,16 @@ from experiments.dynamic_tracking import (
     run_dynamic_experiment,
     save_dynamic_results,
 )
+from experiments.dynamic_repeats import (
+    plot_repeat_results,
+    run_dynamic_repeats,
+    save_repeat_results,
+)
+from experiments.estimator_ablation import (
+    plot_ablation,
+    run_ablation,
+    save_ablation_results,
+)
 from experiments.real_world_conditions import (
     plot_condition_results,
     run_condition_analysis,
@@ -90,8 +100,12 @@ def run_pipeline(
     runtime_warmup: int = 20,
     dynamic_frames: int | None = None,
     real_world_trials: int = 300,
+    ablation_trials: int = 0,
+    dynamic_repeat_count: int = 0,
+    dynamic_repeat_frames: int = 2500,
     run_id: str | None = None,
     target_snr: float | None = None,
+    master_seed: int | None = None,
     profile_overrides: dict[str, dict[str, object]] | None = None,
     yaml_overrides: dict[str, object] | None = None,
 ) -> dict[str, Any]:
@@ -114,6 +128,17 @@ def run_pipeline(
     run_figures_root.mkdir(parents=True, exist_ok=True)
 
     profile_overrides = {} if profile_overrides is None else profile_overrides
+    if master_seed is not None:
+        resolved_overrides = {
+            profile: dict(overrides) for profile, overrides in profile_overrides.items()
+        }
+        for profile in ("ideal", "sensor", "dynamic"):
+            profile_override = dict(resolved_overrides.get(profile, {}))
+            experiment_override = dict(profile_override.get("experiment", {}))
+            experiment_override["master_seed"] = int(master_seed)
+            profile_override["experiment"] = experiment_override
+            resolved_overrides[profile] = profile_override
+        profile_overrides = resolved_overrides
     ideal = scenario_config("ideal", overrides=profile_overrides.get("ideal"))
     sensor = scenario_config("sensor", overrides=profile_overrides.get("sensor"))
     dynamic = scenario_config("dynamic", overrides=profile_overrides.get("dynamic"))
@@ -121,7 +146,15 @@ def run_pipeline(
     roi_count = sensor.experiment.development_trials if roi_trials is None else int(roi_trials)
     dynamic_count = dynamic.trajectory.final_frame_count if dynamic_frames is None else int(dynamic_frames)
     run_snr = dynamic.experiment.target_snr if target_snr is None else float(target_snr)
-    if static_count <= 0 or roi_count <= 0 or runtime_frames <= 0 or runtime_warmup < 0:
+    if (
+        static_count <= 0
+        or roi_count <= 0
+        or runtime_frames <= 0
+        or runtime_warmup < 0
+        or ablation_trials < 0
+        or dynamic_repeat_count < 0
+        or dynamic_repeat_frames <= 0
+    ):
         raise ValueError("trial and runtime counts must be positive")
     if dynamic_count <= 0 or real_world_trials <= 0 or run_snr <= 0:
         raise ValueError("dynamic and real-world trial counts must be positive")
@@ -154,6 +187,31 @@ def run_pipeline(
         ]
     )
 
+    if ablation_trials > 0:
+        ablation_metrics = run_ablation(
+            sensor,
+            snr_values=(1.0, 3.0),
+            trial_count=ablation_trials,
+            outlier_threshold_px=1.0,
+        )
+        ablation_dir = run_results_root / "estimator_ablation"
+        save_ablation_results(
+            ablation_dir,
+            sensor,
+            ablation_metrics,
+            snr_values=(1.0, 3.0),
+            trial_count=ablation_trials,
+            outlier_threshold_px=1.0,
+        )
+        plot_ablation(ablation_metrics, run_figures_root / "estimator_ablation.png")
+        generated.extend(
+            [
+                ablation_dir / "estimator_ablation.json",
+                ablation_dir / "estimator_ablation.csv",
+                run_figures_root / "estimator_ablation.png",
+            ]
+        )
+
     sensor_summaries = run_snr_sweep(sensor, trial_count=static_count)
     sensor_dir = run_results_root / "final_sensor"
     save_sweep_results(
@@ -174,6 +232,24 @@ def run_pipeline(
             run_figures_root / "final_sensor_characterization.png",
         ]
     )
+
+    if dynamic_repeat_count > 0:
+        repeat_rows, repeat_aggregates = run_dynamic_repeats(
+            dynamic,
+            repeat_count=dynamic_repeat_count,
+            frame_count=dynamic_repeat_frames,
+            target_snr=run_snr,
+        )
+        repeat_dir = run_results_root / "dynamic_repeats"
+        save_repeat_results(repeat_dir, dynamic, repeat_rows, repeat_aggregates)
+        plot_repeat_results(repeat_aggregates, run_figures_root / "dynamic_amplitude_repeats.png")
+        generated.extend(
+            [
+                repeat_dir / "dynamic_amplitude_repeats.json",
+                repeat_dir / "dynamic_amplitude_repeats.csv",
+                run_figures_root / "dynamic_amplitude_repeats.png",
+            ]
+        )
 
     roi_rows = run_roi_sensitivity(sensor, trial_count=roi_count)
     roi_dir = run_results_root / "final_roi_sensitivity"
@@ -274,7 +350,11 @@ def run_pipeline(
             "runtime_warmup": runtime_warmup,
             "dynamic_frames": dynamic_count,
             "real_world_trials": real_world_trials,
+            "ablation_trials": ablation_trials,
+            "dynamic_repeat_count": dynamic_repeat_count,
+            "dynamic_repeat_frames": dynamic_repeat_frames,
             "target_snr": run_snr,
+            "master_seed": sensor.experiment.master_seed,
             "lock_threshold_px": 1.0,
         },
         "generated_files": _relative_paths(run_root, generated),
@@ -316,7 +396,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--runtime-warmup", type=int, default=None)
     parser.add_argument("--dynamic-frames", type=int, default=None)
     parser.add_argument("--real-world-trials", type=int, default=None)
+    parser.add_argument("--ablation-trials", type=int, default=None)
+    parser.add_argument("--dynamic-repeat-count", type=int, default=None)
+    parser.add_argument("--dynamic-repeat-frames", type=int, default=None)
     parser.add_argument("--target-snr", type=float, default=None)
+    parser.add_argument("--master-seed", type=int, default=None)
     parser.add_argument(
         "--quick",
         action="store_true",
@@ -332,12 +416,16 @@ def main() -> None:
         yaml_document = load_yaml_overrides(args.config)
     pipeline_overrides = dict(yaml_document["pipeline"])
     allowed_pipeline_keys = {
+        "master_seed",
         "static_trials",
         "roi_trials",
         "runtime_frames",
         "runtime_warmup",
         "dynamic_frames",
         "real_world_trials",
+        "ablation_trials",
+        "dynamic_repeat_count",
+        "dynamic_repeat_frames",
         "target_snr",
     }
     unknown_pipeline_keys = set(pipeline_overrides) - allowed_pipeline_keys
@@ -362,6 +450,8 @@ def main() -> None:
                 "runtime_warmup": 5,
                 "dynamic_frames": 500,
                 "real_world_trials": 20,
+                "ablation_trials": 0,
+                "dynamic_repeat_count": 0,
             }
         )
     manifest = run_pipeline(

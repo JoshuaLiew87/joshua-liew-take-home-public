@@ -315,7 +315,7 @@ def save_sweep_results(
     csv_path = destination / "static_characterization.csv"
     save_json(json_path, metadata)
     with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+        writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()), lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
     return json_path, csv_path

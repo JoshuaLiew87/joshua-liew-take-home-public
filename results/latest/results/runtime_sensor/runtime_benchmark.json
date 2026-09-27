@@ -14,6 +14,8 @@
       "gaussian_roi_size_px": 15,
       "gaussian_sigma_max_px": 5.0,
       "gaussian_sigma_min_px": 0.5,
+      "gaussian_skip_centroid_with_previous": true,
+      "gaussian_tracking_use_previous_roi": false,
       "gaussian_variance_floor_dn2": 1.0,
       "minimum_signal_dn": 1e-09,
       "optimizer_max_nfev": 100
@@ -87,9 +89,9 @@
   },
   "frame_interval_ms": 1.0,
   "software": {
-    "numpy": "2.5.1",
+    "numpy": "2.5.3",
     "platform": "macOS-27.0-arm64-arm-64bit-Mach-O",
-    "python": "3.14.6",
+    "python": "3.13.1",
     "scipy": "1.18.1"
   },
   "summaries": [
@@ -101,17 +103,18 @@
       "failure_rate": 0.0,
       "frame_count": 200,
       "initialization": "cold",
-      "mean_ms": 0.05480286,
-      "median_ms": 0.0541045,
+      "mean_ms": 0.059900595,
+      "median_ms": 0.056833,
       "median_nfev": NaN,
-      "p95_ms": 0.059169049999999994,
+      "p95_ms": 0.07042534999999998,
       "p95_nfev": NaN,
-      "p99_ms": 0.0651695,
+      "p99_ms": 0.07858523999999989,
       "profile": "sensor",
+      "sequence": "fixed",
       "success_count": 200,
       "target_snr": 10.0,
       "warmup_count": 20,
-      "worst_ms": 0.066166
+      "worst_ms": 0.119291
     },
     {
       "deadline_miss_count": 200,
@@ -121,17 +124,18 @@
       "failure_rate": 0.0,
       "frame_count": 200,
       "initialization": "cold",
-      "mean_ms": 1.95312106,
-      "median_ms": 1.9984795,
+      "mean_ms": 1.9634393499999998,
+      "median_ms": 1.9880624999999998,
       "median_nfev": 4.0,
-      "p95_ms": 2.2375496999999998,
+      "p95_ms": 2.2590794999999995,
       "p95_nfev": 5.0,
-      "p99_ms": 2.40694324,
+      "p99_ms": 2.482244169999999,
       "profile": "sensor",
+      "sequence": "fixed",
       "success_count": 200,
       "target_snr": 10.0,
       "warmup_count": 20,
-      "worst_ms": 2.416458
+      "worst_ms": 2.597375
     },
     {
       "deadline_miss_count": 200,
@@ -141,17 +145,18 @@
       "failure_rate": 0.0,
       "frame_count": 200,
       "initialization": "warm",
-      "mean_ms": 1.998761695,
-      "median_ms": 2.010021,
+      "mean_ms": 2.048038565,
+      "median_ms": 1.9218959999999998,
       "median_nfev": 4.0,
-      "p95_ms": 2.3538473,
+      "p95_ms": 2.3562006499999906,
       "p95_nfev": 5.0,
-      "p99_ms": 2.43891941,
+      "p99_ms": 5.867331249999999,
       "profile": "sensor",
+      "sequence": "fixed",
       "success_count": 200,
       "target_snr": 10.0,
       "warmup_count": 20,
-      "worst_ms": 2.486291
+      "worst_ms": 6.555125
     }
   ]
 }

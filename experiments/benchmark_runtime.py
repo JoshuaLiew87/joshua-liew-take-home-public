@@ -18,6 +18,8 @@ from config import ScenarioConfig, scenario_config
 from estimators.centroid import estimate_centroid
 from estimators.gaussian_fit import estimate_gaussian
 from sim.simulator import SpotSimulator
+from sim.trajectory import TrajectoryGenerator
+from common.rng import make_rng_streams
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class RuntimeSummary:
     profile: str
     estimator: str
     initialization: str
+    sequence: str
     target_snr: float
     frame_count: int
     warmup_count: int
@@ -65,12 +68,37 @@ def generate_benchmark_frames(
     ]
 
 
+def generate_tracking_benchmark_frames(
+    config: ScenarioConfig,
+    *,
+    target_snr: float,
+    frame_count: int,
+) -> list[np.ndarray]:
+    """Generate sequential frames from the configured dynamic trajectory."""
+
+    if frame_count <= 0:
+        raise ValueError("frame_count must be positive")
+    streams = make_rng_streams(config.experiment.master_seed)
+    simulator = SpotSimulator(config, rng_streams=streams)
+    trajectory = TrajectoryGenerator(
+        config.trajectory,
+        sensor_shape=(config.sensor.height_px, config.sensor.width_px),
+        position_margin_px=config.spot.position_margin_px,
+        rng=streams.trajectory,
+    ).generate(frame_count)
+    return [
+        simulator.render(tuple(position), target_snr=target_snr).image_dn.copy()
+        for position in trajectory
+    ]
+
+
 def _run_timed_sequence(
     frames: list[np.ndarray],
     config: ScenarioConfig,
     *,
     estimator: str,
     warm_start: bool,
+    sequence: str,
     warmup_count: int,
     target_snr: float,
 ) -> RuntimeSummary:
@@ -118,6 +146,7 @@ def _run_timed_sequence(
         profile=config.name,
         estimator=estimator,
         initialization="warm" if warm_start else "cold",
+        sequence=sequence,
         target_snr=float(target_snr),
         frame_count=len(frames),
         warmup_count=min(warmup_count, len(frames)),
@@ -142,14 +171,20 @@ def run_runtime_benchmark(
     target_snr: float | None = None,
     frame_count: int = 200,
     warmup_count: int = 20,
+    sequence: str = "fixed",
 ) -> list[RuntimeSummary]:
-    """Benchmark centroid cold-start and Gaussian cold/warm-start latency."""
+    """Benchmark centroid and Gaussian latency on fixed or sequential frames."""
 
     config.validate()
     snr = config.experiment.target_snr if target_snr is None else float(target_snr)
     if snr <= 0 or not np.isfinite(snr):
         raise ValueError("target_snr must be finite and positive")
-    frames = generate_benchmark_frames(config, target_snr=snr, frame_count=frame_count)
+    if sequence == "fixed":
+        frames = generate_benchmark_frames(config, target_snr=snr, frame_count=frame_count)
+    elif sequence == "dynamic":
+        frames = generate_tracking_benchmark_frames(config, target_snr=snr, frame_count=frame_count)
+    else:
+        raise ValueError("sequence must be fixed or dynamic")
     summaries = [
         _run_timed_sequence(
             frames,
@@ -158,6 +193,7 @@ def run_runtime_benchmark(
             warm_start=False,
             warmup_count=warmup_count,
             target_snr=snr,
+            sequence=sequence,
         ),
         _run_timed_sequence(
             frames,
@@ -166,6 +202,7 @@ def run_runtime_benchmark(
             warm_start=False,
             warmup_count=warmup_count,
             target_snr=snr,
+            sequence=sequence,
         ),
         _run_timed_sequence(
             frames,
@@ -174,6 +211,7 @@ def run_runtime_benchmark(
             warm_start=True,
             warmup_count=warmup_count,
             target_snr=snr,
+            sequence=sequence,
         ),
     ]
     return summaries
@@ -264,10 +302,12 @@ def plot_runtime_results(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=("ideal", "sensor"), default="sensor")
+    parser.add_argument("--profile", choices=("ideal", "sensor", "dynamic"), default="sensor")
+    parser.add_argument("--config", default=None, help="optional YAML profile override file")
     parser.add_argument("--snr", type=float, default=10.0)
     parser.add_argument("--frames", type=int, default=200)
     parser.add_argument("--warmup", type=int, default=20)
+    parser.add_argument("--sequence", choices=("fixed", "dynamic"), default="fixed")
     parser.add_argument("--output-dir", default="results/runtime_sensor")
     parser.add_argument("--figure", default="figures/runtime_sensor.png")
     parser.add_argument("--no-plot", action="store_true")
@@ -281,12 +321,28 @@ def main() -> None:
         import matplotlib
 
         matplotlib.use("Agg")
-    config = scenario_config(args.profile)
+    profile_overrides = None
+    if args.config is not None:
+        from config import load_yaml_overrides
+
+        yaml_document = load_yaml_overrides(args.config)
+        profile_overrides = {
+            profile: dict(overrides)
+            for profile, overrides in yaml_document["profiles"].items()
+        }
+        if "master_seed" in yaml_document["pipeline"]:
+            profile_override = dict(profile_overrides.get(args.profile, {}))
+            experiment_override = dict(profile_override.get("experiment", {}))
+            experiment_override["master_seed"] = int(yaml_document["pipeline"]["master_seed"])
+            profile_override["experiment"] = experiment_override
+            profile_overrides[args.profile] = profile_override
+    config = scenario_config(args.profile, overrides=profile_overrides.get(args.profile) if profile_overrides else None)
     summaries = run_runtime_benchmark(
         config,
         target_snr=args.snr,
         frame_count=args.frames,
         warmup_count=args.warmup,
+        sequence=args.sequence,
     )
     save_runtime_results(args.output_dir, config, summaries)
     if not args.no_plot:

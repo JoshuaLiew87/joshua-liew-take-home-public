@@ -100,8 +100,9 @@ def convert_to_adc(charge_e: np.ndarray, sensor: SensorConfig) -> ADCResult:
     """Convert charge in electrons to ADC output using sensor settings.
 
     Read noise is already included in ``charge_e`` when this function is
-    called.  Saturation is applied before conversion and quantization is
-    round-to-nearest.  When saturation is disabled, the function leaves the
+    called. Full-well and ADC limits are combined into an equivalent charge
+    limit and applied before conversion to DN. Quantization is round-to-
+    nearest. When saturation is disabled, the function leaves the
     floating-point signal unclipped unless quantization is enabled.
     """
 
