@@ -8,7 +8,9 @@ independently.
 from __future__ import annotations
 
 import argparse
+import csv
 import importlib.metadata
+import math
 import platform
 import shutil
 import sys
@@ -74,6 +76,229 @@ def _relative_paths(root: Path, paths: list[Path]) -> list[str]:
     return [str(path.relative_to(root)) for path in paths]
 
 
+def _print_stage(stage: int, total: int, description: str) -> None:
+    """Print a compact, flush-on-write pipeline progress message."""
+
+    print(f"[{stage:02d}/{total:02d}] {description}", flush=True)
+
+
+def _print_check(name: str, passed: bool, detail: str) -> None:
+    """Print a human-readable configuration or output sanity check."""
+
+    status = "PASS" if passed else "WARN"
+    print(f"    {status:<4} {name}: {detail}", flush=True)
+
+
+def _read_csv_rows(path: Path) -> list[dict[str, str]]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _find_csv_row(path: Path, **criteria: str) -> dict[str, str] | None:
+    for row in _read_csv_rows(path):
+        if all(row.get(key) == value for key, value in criteria.items()):
+            return row
+    return None
+
+
+def _format_csv_value(row: dict[str, str] | None, key: str, digits: int = 3) -> str:
+    if row is None or key not in row:
+        return "n/a"
+    try:
+        return f"{float(row[key]):.{digits}f}"
+    except (TypeError, ValueError):
+        return row[key]
+
+
+def _format_rate(row: dict[str, str] | None, key: str) -> str:
+    if row is None or key not in row:
+        return "n/a"
+    return f"{100 * float(row[key]):.1f}%"
+
+
+def _print_configuration_summary(
+    ideal: Any,
+    sensor: Any,
+    dynamic: Any,
+    *,
+    static_count: int,
+    roi_count: int,
+    runtime_frames: int,
+    runtime_warmup: int,
+    dynamic_count: int,
+    real_world_trials: int,
+    ablation_trials: int,
+    dynamic_repeat_count: int,
+    dynamic_repeat_frames: int,
+    target_snr: float,
+) -> None:
+    """Print the resolved controls and checks before expensive work starts."""
+
+    print("run_all: resolved configuration", flush=True)
+    print(
+        f"  sensor={sensor.sensor.width_px}x{sensor.sensor.height_px}, "
+        f"ADC={sensor.sensor.bit_depth}-bit, "
+        f"frame_rate={sensor.sensor.frame_rate_hz:g} Hz, "
+        f"exposure={sensor.sensor.exposure_s:g} s",
+        flush=True,
+    )
+    print(
+        f"  SNR={target_snr:g}, seed={sensor.experiment.master_seed}, "
+        f"static_trials={static_count}, roi_trials={roi_count}",
+        flush=True,
+    )
+    print(
+        f"  runtime_frames={runtime_frames}, warmup={runtime_warmup}, "
+        f"dynamic_frames={dynamic_count}, outdoor_trials={real_world_trials}",
+        flush=True,
+    )
+    print(
+        f"  ablation_trials={ablation_trials}, "
+        f"dynamic_repeats={dynamic_repeat_count} x {dynamic_repeat_frames} frames",
+        flush=True,
+    )
+    print("run_all: configuration sanity checks", flush=True)
+
+    shared_seed = (
+        ideal.experiment.master_seed
+        == sensor.experiment.master_seed
+        == dynamic.experiment.master_seed
+    )
+    _print_check(
+        "shared master seed",
+        shared_seed,
+        str(sensor.experiment.master_seed),
+    )
+    _print_check(
+        "estimator ROIs",
+        sensor.estimator.centroid_roi_size_px % 2 == 1
+        and sensor.estimator.gaussian_roi_size_px % 2 == 1
+        and sensor.estimator.gaussian_roi_size_px <= min(
+            sensor.sensor.width_px, sensor.sensor.height_px
+        ),
+        f"centroid={sensor.estimator.centroid_roi_size_px} px, "
+        f"Gaussian={sensor.estimator.gaussian_roi_size_px} px",
+    )
+    one_frame_period = math.isclose(
+        sensor.sensor.exposure_s * sensor.sensor.frame_rate_hz,
+        1.0,
+        rel_tol=1e-6,
+        abs_tol=1e-9,
+    )
+    _print_check(
+        "nominal frame timing",
+        one_frame_period,
+        f"exposure x frame rate = "
+        f"{sensor.sensor.exposure_s * sensor.sensor.frame_rate_hz:g}",
+    )
+    below_nyquist = dynamic.trajectory.disturbance_frequency_hz < (
+        dynamic.trajectory.frame_rate_hz / 2.0
+    )
+    _print_check(
+        "periodic disturbance below Nyquist",
+        below_nyquist,
+        f"{dynamic.trajectory.disturbance_frequency_hz:g} Hz < "
+        f"{dynamic.trajectory.frame_rate_hz / 2.0:g} Hz",
+    )
+    _print_check(
+        "validated scenario profiles",
+        True,
+        "ideal, sensor, and dynamic profiles passed validation",
+    )
+
+
+def _print_result_summary(run_root: Path, manifest: dict[str, Any]) -> None:
+    """Print key saved results and output-integrity checks after completion."""
+
+    missing = [
+        run_root / relative_path
+        for relative_path in manifest["generated_files"]
+        if not (run_root / relative_path).is_file()
+    ]
+    _print_check(
+        "generated outputs",
+        not missing,
+        f"{len(manifest['generated_files'])} files recorded in the manifest"
+        if not missing
+        else f"missing {len(missing)} recorded files",
+    )
+    _print_check(
+        "run manifest",
+        (run_root / "run_manifest.json").is_file(),
+        str(run_root / "run_manifest.json"),
+    )
+
+    sensor_csv = run_root / "results" / "final_sensor" / "static_characterization.csv"
+    runtime_csv = run_root / "results" / "runtime_sensor" / "runtime_benchmark.csv"
+    dynamic_csv = run_root / "results" / "dynamic" / "dynamic_summary.csv"
+    snr_one_centroid = _find_csv_row(
+        sensor_csv, estimator="centroid", requested_snr="1.0"
+    )
+    snr_one_gaussian = _find_csv_row(
+        sensor_csv, estimator="gaussian", requested_snr="1.0"
+    )
+    snr_ten_centroid = _find_csv_row(
+        sensor_csv, estimator="centroid", requested_snr="10.0"
+    )
+    snr_ten_gaussian = _find_csv_row(
+        sensor_csv, estimator="gaussian", requested_snr="10.0"
+    )
+    centroid_runtime = _find_csv_row(
+        runtime_csv, estimator="centroid", initialization="cold"
+    )
+    gaussian_runtime = _find_csv_row(
+        runtime_csv, estimator="gaussian", initialization="warm"
+    )
+    dynamic_centroid = _find_csv_row(dynamic_csv, estimator="centroid")
+    dynamic_gaussian = _find_csv_row(dynamic_csv, estimator="gaussian")
+
+    print("run_all: key results", flush=True)
+    print(
+        "  stressed SNR=10 RMSE: "
+        f"centroid={_format_csv_value(snr_ten_centroid, 'radial_rmse_px')} px, "
+        f"Gaussian={_format_csv_value(snr_ten_gaussian, 'radial_rmse_px')} px",
+        flush=True,
+    )
+    print(
+        "  stressed SNR=1 lock loss: "
+        f"centroid={_format_rate(snr_one_centroid, 'lock_failure_rate')}, "
+        f"Gaussian={_format_rate(snr_one_gaussian, 'lock_failure_rate')}",
+        flush=True,
+    )
+    print(
+        "  runtime median: "
+        f"centroid={_format_csv_value(centroid_runtime, 'median_ms')} ms, "
+        f"Gaussian warm={_format_csv_value(gaussian_runtime, 'median_ms')} ms",
+        flush=True,
+    )
+    if gaussian_runtime is not None:
+        gaussian_p99 = float(gaussian_runtime["p99_ms"])
+        if gaussian_p99 > 1.0:
+            print(
+                f"  WARNING: Gaussian warm p99={gaussian_p99:.3f} ms exceeds "
+                "the nominal 1 ms estimator budget",
+                flush=True,
+            )
+    print(
+        "  dynamic RMS error: "
+        f"centroid={_format_csv_value(dynamic_centroid, 'rms_error_px', 4)} px, "
+        f"Gaussian={_format_csv_value(dynamic_gaussian, 'rms_error_px', 4)} px",
+        flush=True,
+    )
+    print(
+        "  disturbance frequency: "
+        f"centroid={_format_csv_value(dynamic_centroid, 'estimated_frequency_hz', 4)} Hz, "
+        f"Gaussian={_format_csv_value(dynamic_gaussian, 'estimated_frequency_hz', 4)} Hz",
+        flush=True,
+    )
+    print(
+        f"  results: {run_root}"
+        f"\n  latest: {run_root.parent.parent / 'latest'}"
+        f"\n  manifest: {run_root / 'run_manifest.json'}",
+        flush=True,
+    )
+
+
 def _make_run_id(results_root: Path, requested_run_id: str | None) -> str:
     """Return a safe, non-colliding UTC run-directory name."""
 
@@ -108,6 +333,7 @@ def run_pipeline(
     master_seed: int | None = None,
     profile_overrides: dict[str, dict[str, object]] | None = None,
     yaml_overrides: dict[str, object] | None = None,
+    verbose: bool = True,
 ) -> dict[str, Any]:
     """Run every required experiment and save its final outputs.
 
@@ -159,8 +385,37 @@ def run_pipeline(
     if dynamic_count <= 0 or real_world_trials <= 0 or run_snr <= 0:
         raise ValueError("dynamic and real-world trial counts must be positive")
 
+    if verbose:
+        print(f"run_all: starting run {run_id}", flush=True)
+        print(f"  output root: {root}", flush=True)
+        _print_configuration_summary(
+            ideal,
+            sensor,
+            dynamic,
+            static_count=static_count,
+            roi_count=roi_count,
+            runtime_frames=runtime_frames,
+            runtime_warmup=runtime_warmup,
+            dynamic_count=dynamic_count,
+            real_world_trials=real_world_trials,
+            ablation_trials=ablation_trials,
+            dynamic_repeat_count=dynamic_repeat_count,
+            dynamic_repeat_frames=dynamic_repeat_frames,
+            target_snr=run_snr,
+        )
+
+    total_stages = 7 + int(ablation_trials > 0) + int(dynamic_repeat_count > 0)
+    current_stage = 0
+
+    def advance_stage(description: str) -> None:
+        nonlocal current_stage
+        current_stage += 1
+        if verbose:
+            _print_stage(current_stage, total_stages, description)
+
     generated: list[Path] = []
 
+    advance_stage("ideal SNR characterization and Fisher reference")
     ideal_summaries = run_snr_sweep(ideal, trial_count=static_count)
     ideal_dir = run_results_root / "final_ideal"
     save_sweep_results(
@@ -188,6 +443,7 @@ def run_pipeline(
     )
 
     if ablation_trials > 0:
+        advance_stage("controlled estimator ablation")
         ablation_metrics = run_ablation(
             sensor,
             snr_values=(1.0, 3.0),
@@ -212,6 +468,7 @@ def run_pipeline(
             ]
         )
 
+    advance_stage("stressed-sensor SNR characterization")
     sensor_summaries = run_snr_sweep(sensor, trial_count=static_count)
     sensor_dir = run_results_root / "final_sensor"
     save_sweep_results(
@@ -234,6 +491,7 @@ def run_pipeline(
     )
 
     if dynamic_repeat_count > 0:
+        advance_stage("multi-seed dynamic amplitude repeat")
         repeat_rows, repeat_aggregates = run_dynamic_repeats(
             dynamic,
             repeat_count=dynamic_repeat_count,
@@ -251,6 +509,7 @@ def run_pipeline(
             ]
         )
 
+    advance_stage("ROI sensitivity study")
     roi_rows = run_roi_sensitivity(sensor, trial_count=roi_count)
     roi_dir = run_results_root / "final_roi_sensitivity"
     save_roi_results(
@@ -269,6 +528,7 @@ def run_pipeline(
         ]
     )
 
+    advance_stage("estimator runtime benchmarks")
     for profile, config in (("ideal", ideal), ("sensor", sensor)):
         runtime_summaries = run_runtime_benchmark(
             config,
@@ -290,6 +550,7 @@ def run_pipeline(
             ]
         )
 
+    advance_stage("dynamic trajectory and disturbance recovery")
     dynamic_result = run_dynamic_experiment(
         dynamic,
         target_snr=run_snr,
@@ -308,6 +569,7 @@ def run_pipeline(
         ]
     )
 
+    advance_stage("controlled outdoor-condition stress analysis")
     real_world_metrics = run_condition_analysis(
         sensor,
         trial_count=real_world_trials,
@@ -334,6 +596,7 @@ def run_pipeline(
         ]
     )
 
+    advance_stage("write manifest and refresh latest snapshot")
     manifest = {
         "workflow": "run_all",
         "workflow_version": 2,
@@ -369,6 +632,9 @@ def run_pipeline(
     elif latest_dir.exists():
         shutil.rmtree(latest_dir)
     shutil.copytree(run_root, latest_dir)
+    if verbose:
+        print("run_all: post-run sanity checks", flush=True)
+        _print_result_summary(run_root, manifest)
     return manifest
 
 

@@ -781,6 +781,26 @@ first-frame PNG because PDF does not provide animation. The display is
 intentionally slower than the 1 kHz benchmark and is included as a review aid
 rather than as a quantitative result.*
 
+### 11.2 Reproduction pipeline
+
+With the final YAML configuration, `run_all.py` executes the following stages
+in order. The first eight stages are scientific analyses; the final stage
+writes provenance metadata and refreshes the stable `results/latest/` snapshot.
+The ablation and multi-seed repeat stages are enabled by `configs/final.yaml`
+but can be disabled for smaller runs.
+
+| Stage | Operation | Main output | Report coverage |
+|---:|---|---|---|
+| 1 | Ideal SNR characterization and Fisher reference | `final_ideal/`; ideal figure | Sections 5–6 |
+| 2 | Controlled estimator ablation | `estimator_ablation/`; ablation figure | Section 5.1 |
+| 3 | Stressed-sensor SNR characterization | `final_sensor/`; stressed figure | Section 5 |
+| 4 | Multi-seed dynamic amplitude repeat | `dynamic_repeats/`; repeat figure | Section 8 |
+| 5 | ROI sensitivity study | `final_roi_sensitivity/`; ROI figure | Section 5 |
+| 6 | Estimator runtime benchmarks | `runtime_ideal/`, `runtime_sensor/`; runtime figures | Section 7 |
+| 7 | Dynamic trajectory and disturbance recovery | `dynamic/`; trajectory and spectrum figure | Section 8 |
+| 8 | Controlled outdoor-condition stress analysis | `real_world/`; stress figure | Section 9 |
+| 9 | Manifest creation and latest-snapshot refresh | `run_manifest.json`; `results/latest/` | Section 11 |
+
 ## 12. Assignment traceability
 
 \begingroup

@@ -39,8 +39,22 @@ reference, ROI study, runtime benchmark, controlled estimator ablation,
 dynamic trajectory/disturbance analysis, multi-seed amplitude repeat,
 real-world stress analysis, figures, and a run manifest.
 
+During execution, `run_all.py` prints the resolved seed and experiment sizes,
+sanity checks for the sensor timing, estimator ROIs, and disturbance sampling,
+stage-level progress, and a short summary of the saved RMSE, lock-loss,
+runtime, and disturbance-recovery results. It also warns when the Gaussian
+fit exceeds the nominal 1 ms estimator budget. The detailed values remain in
+the CSV/JSON outputs and the run manifest.
+
 The newest results are copied to `results/latest/`. Timestamped copies are
 retained under `results/runs/`.
+
+At a high level, the command runs ideal characterization, estimator ablation,
+stressed-sensor characterization, dynamic repeatability, ROI sensitivity,
+runtime benchmarking, dynamic disturbance recovery, outdoor-condition stress
+analysis, and finally manifest/latest-snapshot generation. The first eight
+stages produce scientific results; the last stage records provenance and
+organizes the outputs.
 
 Run the tests with:
 
@@ -48,7 +62,19 @@ Run the tests with:
 python -m pytest -q
 ```
 
-The current suite contains 44 tests.
+The test suite currently contains 44 tests. These are automated regression and
+sanity checks for the simulator, pixel-integrated PSF, sensor-noise chain,
+centroid and Gaussian estimators, analytical Jacobian, configuration
+validation, trajectory generation, experiment outputs, and reproducibility
+contracts. They are intended to catch implementation regressions such as
+coordinate mistakes, incorrect noise ordering, invalid estimator results, or
+broken output files.
+
+`pytest` verifies that the implementation is behaving consistently; it does
+not replace the Monte Carlo characterization or runtime benchmark. Use
+`python run_all.py --config configs/final.yaml` to regenerate the quantitative
+figures and results, and use `pytest` as the fast correctness check before or
+after making changes.
 
 ## Design and implementation summary
 
