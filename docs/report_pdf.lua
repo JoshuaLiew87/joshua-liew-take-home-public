@@ -1,5 +1,14 @@
 -- Promote the Markdown Abstract section into Pandoc front matter so the
 -- generated PDF places it before the table of contents.
+-- PDF cannot animate GIFs, so the live-demo GIF is replaced by its
+-- PDF-compatible first-frame PNG during PDF generation.
+function Image(image)
+  if image.src:match("live_demo%.gif$") then
+    image.src = image.src:gsub("live_demo%.gif$", "live_demo.png")
+  end
+  return image
+end
+
 function Pandoc(doc)
   local body = pandoc.List()
   local abstract = pandoc.List()

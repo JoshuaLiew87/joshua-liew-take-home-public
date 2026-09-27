@@ -466,7 +466,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lock-threshold-px", type=float, default=1.0)
     parser.add_argument("--estimator", choices=("both", "centroid", "gaussian"), default="both")
     parser.add_argument("--output-dir", default="results/dynamic")
-    parser.add_argument("--figure", default="figures/dynamic_tracking.png")
+    parser.add_argument("--figure", default="results/standalone/figures/dynamic_tracking.png")
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()

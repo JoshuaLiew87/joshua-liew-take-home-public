@@ -686,7 +686,7 @@ The controlled real-world conditions analysis can be reproduced with:
 python -m experiments.real_world_conditions \
   --trials 300 \
   --output-dir results/real_world \
-  --figure figures/real_world_conditions.png
+  --figure results/standalone/figures/real_world_conditions.png
 ```
 
 The live demonstration can be launched with:
@@ -720,11 +720,13 @@ The hot-pixel case is a controlled GUI intervention rather than a change to
 the production sensor model, and is used to discuss estimator sensitivity
 rather than claim automatic rejection by the Gaussian fit.
 
-![Live simulator demonstration](docs/figures/live_demo.png)
+![Animated live simulator demonstration](docs/figures/live_demo.gif)
 
 *Figure 9. Live simulator demonstration using the production simulator and
-estimators. The display is intentionally slower than the 1 kHz benchmark and
-is included as a review aid rather than as a quantitative result.*
+estimators. The Markdown report displays the animation; PDF export uses its
+first-frame PNG because PDF does not provide animation. The display is
+intentionally slower than the 1 kHz benchmark and is included as a review aid
+rather than as a quantitative result.*
 
 ## 12. Assignment traceability
 

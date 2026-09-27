@@ -459,7 +459,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trials", type=int, default=None)
     parser.add_argument("--snr-values", type=float, nargs="+")
     parser.add_argument("--output-dir", default="results/static")
-    parser.add_argument("--figure", default="figures/static_characterization.png")
+    parser.add_argument("--figure", default="results/standalone/figures/static_characterization.png")
     parser.add_argument("--outlier-threshold-px", type=float, default=1.0)
     parser.add_argument(
         "--no-theory",

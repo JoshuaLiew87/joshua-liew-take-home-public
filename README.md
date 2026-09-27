@@ -158,9 +158,9 @@ is a demonstration layer; its display timer is intentionally slower than 1
 kHz. The offline benchmark and `run_all.py` outputs are the authoritative
 results.
 
-![Live simulator demonstration](docs/figures/live_demo.png)
+![Animated live simulator demonstration](docs/figures/live_demo.gif)
 
-The screenshot uses the same production simulator and estimators as the batch
+The animation uses the same production simulator and estimators as the batch
 experiments. It is provided for an interactive review demonstration; the saved
 figures and numerical outputs remain the authoritative results.
 

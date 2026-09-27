@@ -194,7 +194,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frames", type=int, default=2500)
     parser.add_argument("--snr", type=float, default=10.0)
     parser.add_argument("--output-dir", default="results/dynamic_repeats")
-    parser.add_argument("--figure", default="figures/dynamic_amplitude_repeats.png")
+    parser.add_argument("--figure", default="results/standalone/figures/dynamic_amplitude_repeats.png")
     return parser.parse_args()
 
 

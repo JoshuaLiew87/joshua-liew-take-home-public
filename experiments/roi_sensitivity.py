@@ -147,7 +147,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--snr-values", type=float, nargs="+", default=(3.0, 10.0, 30.0))
     parser.add_argument("--roi-sizes", type=int, nargs="+", default=(11, 13, 15))
     parser.add_argument("--output-dir", default="results/roi_sensitivity")
-    parser.add_argument("--figure", default="figures/roi_sensitivity.png")
+    parser.add_argument("--figure", default="results/standalone/figures/roi_sensitivity.png")
     parser.add_argument("--outlier-threshold-px", type=float, default=1.0)
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()

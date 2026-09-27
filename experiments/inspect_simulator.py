@@ -9,7 +9,7 @@ Display a sensor-profile frame::
 Save a headless diagnostic figure::
 
     python -m experiments.inspect_simulator --profile sensor --snr 10 \
-        --output figures/simulator_sanity.png --no-show
+        --output results/standalone/figures/simulator_sanity.png --no-show
 """
 
 from __future__ import annotations

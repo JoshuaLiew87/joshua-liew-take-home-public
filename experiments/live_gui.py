@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import replace
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -444,12 +445,62 @@ class LiveLocalizationDemo:
         plt.show()
 
 
+def save_demo_gif(
+    config: ScenarioConfig,
+    output_path: str | Path,
+    *,
+    snr: float | None = None,
+    estimator_name: str = "Gaussian fit",
+    frame_count: int = 24,
+    fps: int = 8,
+    dpi: int = 80,
+) -> Path:
+    """Render a short animated review clip from the live-demo figure.
+
+    The animation uses the same simulator, trajectory generator, controls,
+    and estimator as the interactive GUI. It is intended for Markdown/README
+    previews; PDF export uses the first-frame PNG fallback.
+    """
+
+    from matplotlib.animation import FuncAnimation, PillowWriter
+
+    if frame_count <= 0 or fps <= 0 or dpi <= 0:
+        raise ValueError("frame_count, fps, and dpi must be positive")
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    demo = LiveLocalizationDemo(
+        config,
+        snr=snr,
+        estimator_name=estimator_name,
+        display_interval_ms=50,
+    )
+    demo.figure.set_facecolor("white")
+
+    def update(_frame: int) -> tuple[()]:
+        demo._update_frame()
+        return ()
+
+    animation = FuncAnimation(
+        demo.figure,
+        update,
+        frames=frame_count,
+        interval=1000.0 / fps,
+        blit=False,
+    )
+    animation.save(output, writer=PillowWriter(fps=fps), dpi=dpi)
+    plt.close(demo.figure)
+    return output
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--profile", choices=("sensor", "ideal", "dynamic"), default="sensor")
     parser.add_argument("--snr", type=float, default=None)
     parser.add_argument("--estimator", choices=("centroid", "gaussian"), default="gaussian")
     parser.add_argument("--interval-ms", type=int, default=50)
+    parser.add_argument("--save-gif", type=Path, default=None)
+    parser.add_argument("--gif-frames", type=int, default=24)
+    parser.add_argument("--gif-fps", type=int, default=8)
     return parser.parse_args()
 
 
@@ -457,12 +508,23 @@ def main() -> None:
     args = parse_args()
     config = scenario_config(args.profile)
     estimator_name = "Centroid" if args.estimator == "centroid" else "Gaussian fit"
-    LiveLocalizationDemo(
-        config,
-        snr=args.snr,
-        estimator_name=estimator_name,
-        display_interval_ms=args.interval_ms,
-    ).show()
+    if args.save_gif is not None:
+        save_demo_gif(
+            config,
+            args.save_gif,
+            snr=args.snr,
+            estimator_name=estimator_name,
+            frame_count=args.gif_frames,
+            fps=args.gif_fps,
+        )
+        print(f"Saved live-demo GIF to {args.save_gif}")
+    else:
+        LiveLocalizationDemo(
+            config,
+            snr=args.snr,
+            estimator_name=estimator_name,
+            display_interval_ms=args.interval_ms,
+        ).show()
 
 
 if __name__ == "__main__":

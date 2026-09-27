@@ -343,7 +343,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trials", type=int, default=300)
     parser.add_argument("--target-snr", type=float, default=10.0)
     parser.add_argument("--output-dir", default="results/real_world")
-    parser.add_argument("--figure", default="figures/real_world_conditions.png")
+    parser.add_argument("--figure", default="results/standalone/figures/real_world_conditions.png")
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()

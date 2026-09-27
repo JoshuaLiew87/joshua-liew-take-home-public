@@ -309,7 +309,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--warmup", type=int, default=20)
     parser.add_argument("--sequence", choices=("fixed", "dynamic"), default="fixed")
     parser.add_argument("--output-dir", default="results/runtime_sensor")
-    parser.add_argument("--figure", default="figures/runtime_sensor.png")
+    parser.add_argument("--figure", default="results/standalone/figures/runtime_sensor.png")
     parser.add_argument("--no-plot", action="store_true")
     parser.add_argument("--show", action="store_true")
     return parser.parse_args()

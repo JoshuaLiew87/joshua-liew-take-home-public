@@ -324,7 +324,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trials", type=int, default=250)
     parser.add_argument("--snr-values", type=float, nargs="+", default=[1.0, 3.0])
     parser.add_argument("--output-dir", default="results/ablation")
-    parser.add_argument("--figure", default="figures/estimator_ablation.png")
+    parser.add_argument("--figure", default="results/standalone/figures/estimator_ablation.png")
     return parser.parse_args()
 
 
