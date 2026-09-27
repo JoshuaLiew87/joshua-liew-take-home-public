@@ -1,5 +1,11 @@
 .specstory
 .vscode
-.pytest_cache
+.pytest_cache/
 .DS_Store
-.pyc
+
+# Python bytecode and local caches
+__pycache__/
+*.py[cod]
+
+# Local virtual environment
+.venv/

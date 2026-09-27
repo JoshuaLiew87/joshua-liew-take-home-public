@@ -1,166 +1,131 @@
-# Transcelestial spot localization
+# Sub-pixel laser spot localization
 
-This repository studies sub-pixel localization of a noisy Gaussian laser spot for a camera-guided pointing system.
+Sub-pixel localization of a noisy laser beacon for a camera-guided pointing
+and tracking system.
 
-## Environment
+## Start here
 
-The project uses Python with NumPy, SciPy, Matplotlib, and pytest. The working Conda environment is named `transcelestial`.
+Read the [technical report](report.md) first for the methodology, assumptions,
+quantitative results, estimator comparison, runtime analysis, dynamic recovery,
+and limitations.
+
+## Setup
+
+Create and activate a local Python virtual environment, then install the
+dependencies:
 
 ```bash
-conda activate transcelestial
-python -m pytest -q
-```
-
-If the environment is not available, install the project dependencies with:
-
-```bash
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-## Current status
+On Windows, activate the environment with `.venv\Scripts\activate` instead.
 
-Day 1 foundations, Phase 1 simulator foundations, the Phase 2 estimator
-baseline, and the post-core live demonstration foundation are implemented.
-The simulator currently provides:
+## Run the complete study
 
-- a pixel-integrated Gaussian PSF;
-- configurable 32×32 sensor geometry and explicit electron/DN units;
-- target-SNR-to-total-flux calibration;
-- persistent PRNU, dark-current, and hot-pixel maps;
-- independent toggles for photon, read, dark-current, background, PRNU, and hot-pixel effects;
-- Poisson shot noise and Gaussian read noise;
-- ADC conversion, quantization, and saturation diagnostics;
-- deterministic named random-number-generator streams;
-- a shared full-frame peak detector and configurable local ROIs;
-- a background-corrected intensity-weighted centroid;
-- a bounded pixel-integrated Gaussian fit with an analytical Jacobian.
-- a reusable drift/jitter/periodic-disturbance trajectory generator;
-- an interactive live demo with SNR, noise, sensor, motion, and estimator controls.
-- a static Monte Carlo characterization runner with CSV/JSON output and plots.
-
-The validation suite currently contains 38 tests covering component
-statistics, noise ablations, ADC invariants, edge behavior, metadata,
-reproducibility, estimator recovery, Jacobian correctness, and estimator
-failure handling, trajectory reproducibility, and characterization metrics.
-
-The static characterization runner, clean theoretical reference, and ROI
-sensitivity study are implemented. A complete `run_all.py` execution stores
-the final 1,000-trial ideal and stressed results under
-`results/latest/results/final_ideal/` and
-`results/latest/results/final_sensor/`, with figures under
-`results/latest/figures/`. The runtime benchmark is implemented and its
-ideal/stressed results are saved under
-`results/latest/results/runtime_ideal/` and
-`results/latest/results/runtime_sensor/`. The final dynamic experiment is implemented; its
-5,000-frame trajectory, summary, and spectrum outputs are saved under
-`results/latest/results/dynamic/`, with the figure under
-`results/latest/figures/dynamic_tracking.png`.
-The Phase 6 real-world conditions analysis is implemented; its controlled
-stress metrics are saved under `results/latest/results/real_world/`, with the
-figure under `results/latest/figures/real_world_conditions.png`. Each run is
-also retained under `results/runs/<UTC timestamp>/`; `results/latest/` is a
-stable snapshot of the most recent run. The complete one-command reproduction
-pipeline is implemented by `run_all.py`; its manifest is saved as
-`results/latest/run_manifest.json`.
-
-The characterization pilot can be run with:
+The recommended reproducible command is:
 
 ```bash
-python -m experiments.characterize_snr \
-  --profile ideal \
-  --trials 20 \
-  --snr-values 1 3 10 30 \
-  --output-dir results/static_pilot \
-  --figure figures/static_characterization_pilot.png
+python run_all.py --config configs/final.yaml
 ```
 
-The controlled outdoor-condition analysis can be run with:
+This generates the static SNR characterization, theoretical precision
+reference, ROI study, runtime benchmark, dynamic trajectory/disturbance
+analysis, real-world stress analysis, figures, and a run manifest.
+
+The newest results are copied to `results/latest/`. Timestamped copies are
+retained under `results/runs/`.
+
+Run the tests with:
 
 ```bash
-conda run -n transcelestial python -m experiments.real_world_conditions \
-  --trials 300 \
-  --output-dir results/real_world \
-  --figure figures/real_world_conditions.png
+python -m pytest -q
 ```
 
-To regenerate the complete study:
+The current suite contains 38 tests.
 
-```bash
-conda run -n transcelestial python run_all.py
-```
+## Design and implementation summary
 
-Use `--run-id NAME` when a human-readable or fixed run-directory name is
-preferred. Without it, the workflow uses the current UTC timestamp.
+- Pixel-integrated circular Gaussian spot model.
+- Configurable photon, read, dark-current, background, PRNU, hot-pixel,
+  quantization, and saturation effects.
+- Background-subtracted windowed centroid.
+- Bounded pixel-integrated Gaussian fit with an analytical Jacobian.
+- Monte Carlo bias, precision, RMSE, failure, and lock-loss characterization
+  versus SNR, with uncertainty bars.
+- Clean-model Fisher-information/CRLB reference.
+- Runtime benchmark against a 1 ms / 1 kHz frame budget.
+- Dynamic drift, correlated jitter, and periodic-disturbance recovery.
+- Controlled outdoor-condition stress analysis.
+- Optional live GUI using the same simulator and estimators.
 
-YAML files act as validated overrides rather than a second configuration
-system. For example, the documented final settings can be run with:
+The centroid is the low-latency baseline. The Gaussian fit is generally more
+accurate when the spot is observable, but is more computationally expensive
+and can lose lock at very low SNR or under model mismatch.
 
-```bash
-conda run -n transcelestial python run_all.py --config configs/final.yaml
-```
+## Key assumptions
 
-The file may contain `pipeline` controls and per-profile overrides under
-`profiles: ideal`, `profiles: sensor`, or `profiles: dynamic`. Omitted values
-inherit from `config.py`; unknown sections and fields are rejected.
+- Sensor: 32×32 pixels, 1 ms exposure, nominal 1 kHz frame rate.
+- Spot: circular Gaussian with an approximately 7-pixel 1/e² diameter,
+  corresponding to sigma = 1.75 pixels.
+- Brightness: controlled through total expected spot electrons; target SNR is
+  converted to flux using a pixel-centred reference spot.
+- Sensor model: 12-bit ADC, 1 electron/DN, 3-electron RMS read noise, PRNU,
+  dark current, background gradients, and persistent hot pixels.
+- Dynamic drift: bounded Ornstein–Uhlenbeck process with correlated jitter and
+  one 73 Hz sinusoidal disturbance.
+- Lock-loss analysis: finite estimates with radial error greater than 1 pixel
+  are classified as out of lock.
+- CRLB: a clean Poisson-plus-read-noise reference for the ideal model, not a
+  universal bound for saturated, quantized, or contaminated sensor frames.
+
+The decision log is in
+[`docs/decisions.md`](docs/decisions.md). The original assignment is preserved
+in [`docs/assignment_spec.md`](docs/assignment_spec.md), and the development
+plan is in [`docs/plan.md`](docs/plan.md).
 
 ## Live demonstration
 
-After the core characterization and dynamic results are complete, launch the
-interactive demonstration with:
+Launch the optional review GUI with:
 
 ```bash
-python -m experiments.live_gui --profile sensor --snr 10
-```
-
-The GUI uses the production simulator and estimators. It provides sliders for
-SNR (including low- and high-flux presets), drift, jitter, disturbance
-amplitude, and disturbance frequency;
-checkboxes for the assignment-relevant noise and sensor effects; and a
-centroid/Gaussian estimator selector. It shows the current sensor frame,
-true versus estimated position, trajectory history, and position error.
-When the figure has focus, the arrow keys nudge the true position by 0.1
-pixel; Shift+S selects a low-flux preset, Shift+D selects a high-flux preset,
-G toggles the background gradient, H injects one persistent ROI-edge hot
-pixel, and Q or Escape closes the window. Matplotlib's default keyboard
-shortcuts are disabled for this figure. These shortcuts are demonstration-only
-controls and do not alter the reproducible offline experiments.
-Its time-history error plot is a live diagnostic, not the required
-error-versus-SNR characterization. The latter belongs to the offline Monte
-Carlo pipeline and are regenerated by the `run_all.py` workflow.
-The display timer is intentionally slower than 1 kHz; the separate runtime
-benchmark remains the evidence for real-time feasibility.
-
-## Simulator visual sanity check
-
-The Phase 1 simulator can still be inspected independently of the estimator
-and experiment pipelines:
-
-```bash
-python -m experiments.inspect_simulator --profile sensor --snr 10
-```
-
-To save a headless diagnostic figure:
-
-```bash
-python -m experiments.inspect_simulator \
+python -m experiments.live_gui \
   --profile sensor \
-  --snr 10 \
-  --x 15.25 \
-  --y 16.40 \
-  --output figures/simulator_sanity.png \
-  --no-show
+  --snr 10
 ```
 
-The four panels show the expected spot, expected background plus dark current,
-sampled ADC output, and charge residual. Cyan marks the true sub-pixel position;
-red marks the brightest expected spot pixel. The figure title reports target,
-reference, and effective SNR, sigma, total flux, and saturation count.
+The GUI shows the simulated sensor frame, true and estimated positions,
+trajectory history, and position error. It provides controls for SNR, motion,
+noise effects, sensor effects, and estimator selection.
 
-## Reproducibility conventions
+With the figure focused:
 
-- Images use `image[y, x]` array indexing.
-- Positions use `(x, y)` pixel-center coordinates.
-- Pixel centers are integer coordinates and pixel boundaries are half a pixel away.
-- Spot brightness is physically represented by total expected electrons.
-- Experiments expose `target_snr`/`snr_sweep` and map them to total spot flux.
-- A master seed creates independent named RNG streams.
+- Arrow keys: nudge the true position by 0.1 pixel.
+- `Shift+S`: low-flux preset, SNR 1.
+- `Shift+D`: high-flux preset, SNR 1000.
+- `G`: toggle the background gradient.
+- `H`: inject a persistent ROI-edge hot pixel for demonstration.
+- `Q` or `Escape`: close the window.
+
+Matplotlib's default keyboard shortcuts are disabled for this figure. The GUI
+is a demonstration layer; its display timer is intentionally slower than 1
+kHz. The offline benchmark and `run_all.py` outputs are the authoritative
+results.
+
+## Output locations
+
+- Static characterization: `results/latest/results/final_ideal/` and
+  `results/latest/results/final_sensor/`
+- Theoretical reference: `results/latest/results/final_ideal/`
+- Runtime benchmarks: `results/latest/results/runtime_ideal/` and
+  `results/latest/results/runtime_sensor/`
+- Dynamic trajectory and disturbance analysis:
+  `results/latest/results/dynamic/`
+- Outdoor stress analysis: `results/latest/results/real_world/`
+- Figures: `results/latest/figures/`
+- Reproduction metadata: `results/latest/run_manifest.json`
+
+The simulator and estimators use `image[y, x]` array indexing and `(x, y)`
+pixel-centre coordinates. All experiments use deterministic named random
+streams derived from a master seed.

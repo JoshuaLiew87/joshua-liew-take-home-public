@@ -37,8 +37,8 @@
     "static_trials": 1000,
     "target_snr": 10.0
   },
-  "run_directory": "results/runs/20260926T102756Z",
-  "run_id": "20260926T102756Z",
+  "run_directory": "results/runs/20260927T024352Z",
+  "run_id": "20260927T024352Z",
   "runtime_measurements_are_machine_load_dependent": true,
   "seed": 20260925,
   "software": {
