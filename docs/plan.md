@@ -231,7 +231,7 @@ Derive a Fisher-information reference for the pixel-integrated forward model. Th
 \theta=(x_0,y_0,A,\sigma,b_0,b_x,b_y).
 \]
 
-For the clean Poisson-plus-read-noise approximation, compute the expected pixel means and their derivatives. Include nuisance parameters in the Fisher matrix and use the inverse or Schur complement to obtain the position covariance bound.
+For the clean Poisson-plus-read-noise approximation, compute the expected pixel means and their derivatives. Use the diagonal variance approximation implemented by `experiments/theory.py`, include nuisance parameters in the Fisher matrix, and use the pseudoinverse or Schur complement to obtain the position covariance reference. Label it as a clean-model Fisher approximation rather than an exact bound for the full Poisson-Gaussian convolution.
 
 The report and `experiments/theory.py` should explain:
 

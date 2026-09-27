@@ -194,8 +194,9 @@ def estimate_gaussian(
                 parameters, roi.x_coords, roi.y_coords, center_xy
             )
             variance_dn = np.maximum(
-                model.ravel(), config.estimator.gaussian_variance_floor_dn2
-            ) / electrons_per_dn
+                model.ravel() / electrons_per_dn,
+                config.estimator.gaussian_variance_floor_dn2,
+            )
             variance_dn += read_noise_dn * read_noise_dn
             weights = 1.0 / np.sqrt(np.maximum(variance_dn, 1e-9))[valid.ravel()]
 

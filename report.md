@@ -63,7 +63,8 @@ The nominal sensor contains 32 × 32 pixels, has a 1 ms exposure, and operates
 at a nominal frame rate of 1 kHz.
 
 The spot width is specified using the assignment's approximately 7-pixel
-diameter at the 1/e² intensity level. For
+diameter at the 1/e² intensity level. Let $w$ denote the corresponding
+1/e² radius, so the assignment diameter gives $w=3.5$ pixels. For
 
 $$
 I(r)=I_0\exp\left(-\frac{2r^2}{w^2}\right),
@@ -178,13 +179,14 @@ analytical Jacobian. Two fixed iteratively reweighted steps approximate
 Poisson-plus-read-noise weighting using
 
 $$
-V_i\approx\frac{\max(\mu_i,0)}{g}+\sigma_{r,DN}^2,
+V_i\approx\max\left(\frac{\mu_i}{g},V_{\mathrm{floor}}\right)
+      +\sigma_{r,DN}^2,
 $$
 
-where $g$ is the electrons-per-DN conversion gain. A configurable 1 DN²
-floor is applied to the first term before weighting, preventing tiny or
-negative fitted tail-background values from receiving numerically dominant
-weights. Pixels at the ADC limit
+where $g$ is the electrons-per-DN conversion gain and
+$V_{\mathrm{floor}}$ is the configurable DN$^2$ variance floor. The floor
+prevents tiny or negative fitted tail-background values from receiving
+numerically dominant weights. Pixels at the ADC limit
 are excluded when saturation is enabled. The implementation records optimizer
 cost, function evaluations, optimality, fitted width and flux, background
 coefficients, valid-pixel count, and saturation count.
@@ -348,10 +350,32 @@ Gaussian estimates.*
 
 A Fisher-information reference has been computed from the pixel-integrated
 forward model. The nuisance-parameter vector includes position, flux, width,
-and planar-background terms. The reference uses a clean Poisson model with a
-configurable read-noise term, set to zero in the ideal profile, a 15 × 15
-evaluation ROI, and an 8 × 8 grid of sub-pixel phases. The x/y variances are
-averaged over phase before taking the square root.
+and planar-background terms. For each pixel, the expected mean is
+
+$$
+\mu_{ij}=A p_{ij}(x_0,y_0,\sigma)+b_0+b_x(x_i-c_x)+b_y(y_j-c_y),
+$$
+
+where $p_{ij}$ is the product of the two normal-CDF differences over the
+finite pixel aperture. The implementation uses the diagonal
+Poisson-plus-read-noise variance approximation
+
+$$
+V_{ij}\approx\frac{\max(\mu_{ij},0)}{g}+\sigma_{r,\mathrm{DN}}^2,
+\qquad
+\mathcal{I}=J^\mathsf{T}\operatorname{diag}(V_{ij}^{-1})J,
+$$
+
+where $g$ is the electrons-per-DN conversion gain. The position covariance is
+obtained from the pseudoinverse of $\mathcal{I}$, including the nuisance
+parameters. The estimator’s separate $V_{\mathrm{floor}}$ is not applied to
+this clean reference because the expected clean pixel means are non-negative.
+This is a clean-model Fisher reference
+(often called a quasi-CRLB here), not the exact Fisher information of the full
+Poisson–Gaussian convolution with parameter-dependent variance. The reference
+uses a configurable read-noise term, set to zero in the ideal profile, a
+15 × 15 evaluation ROI, and an 8 × 8 grid of sub-pixel phases. The x/y
+variances are averaged over phase before taking the square root.
 
 For the ideal profile, the resulting radial reference standard deviations are
 0.564 pixels at SNR 1, 0.0564 pixels at SNR 10, and 0.000564 pixels at SNR
@@ -359,7 +383,8 @@ For the ideal profile, the resulting radial reference standard deviations are
 characterization figure. It is a precision reference for the stated model,
 not a universal bound for the stressed results.
 
-This reference is a precision bound for the stated idealized model. ADC
+This reference is a precision floor for the stated idealized approximation.
+ADC
 quantization, saturation, hot-pixel contamination, and unmodeled optical or
 sensor effects will be treated as model mismatch rather than implicitly
 included in the clean bound.

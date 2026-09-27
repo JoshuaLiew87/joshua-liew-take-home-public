@@ -1,4 +1,4 @@
-"""Clean-model Fisher-information reference for spot-position precision."""
+"""Clean-model Fisher-information approximation for spot precision."""
 
 from __future__ import annotations
 
@@ -23,11 +23,13 @@ def compute_position_crlb(
     phase_grid_size: int = 8,
     roi_size_px: int | None = None,
 ) -> dict[str, np.ndarray | int | float]:
-    """Compute a phase-averaged Poisson Fisher-information reference.
+    """Compute a phase-averaged Poisson/read-noise Fisher approximation.
 
     The parameter vector contains position, total flux, width, and a planar
-    background.  This is a clean-model precision reference, not a bound for
-    clipped, quantized, or contaminated stressed-sensor frames.
+    background. The information matrix uses a diagonal
+    Poisson-plus-read-noise variance approximation. This is a clean-model
+    precision reference, not an exact bound for the full Poisson-Gaussian
+    observation model or for clipped, quantized, or contaminated frames.
     """
 
     config.validate()
@@ -133,7 +135,7 @@ def save_theory_results(
         for index in range(snr.size)
     ]
     metadata = {
-        "model": "pixel-integrated Gaussian with Poisson/read-noise Fisher information",
+        "model": "pixel-integrated Gaussian with diagonal Poisson/read-noise Fisher approximation",
         "configuration": config,
         "phase_grid_size": theory["phase_grid_size"],
         "roi_size_px": theory["roi_size_px"],

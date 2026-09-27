@@ -87,7 +87,7 @@
       "ou_drift_rms_px": 0.6
     }
   },
-  "model": "pixel-integrated Gaussian with Poisson/read-noise Fisher information",
+  "model": "pixel-integrated Gaussian with diagonal Poisson/read-noise Fisher approximation",
   "phase_grid_size": 8,
   "roi_size_px": 15,
   "rows": [
