@@ -354,7 +354,7 @@ Poisson-plus-read-noise variance approximation
 $$
 V_{ij}\approx\frac{\max(\mu_{ij},0)}{g}+\sigma_{r,\mathrm{DN}}^2,
 \qquad
-\mathcal{I}=J^\mathsf{T}\operatorname{diag}(V_{ij}^{-1})J,
+\mathcal{I}=J^\mathsf{T}\mathrm{diag}(V_{ij}^{-1})J,
 $$
 
 where $g$ is the electrons-per-DN conversion gain. The position covariance is
