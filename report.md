@@ -175,7 +175,7 @@ V_i\approx\max\left(\frac{\mu_i}{g},V_{\mathrm{floor}}\right)
 $$
 
 where $g$ is the electrons-per-DN conversion gain and
-$V_{\mathrm{floor}}$ is the configurable DN$^2$ variance floor. The floor
+$V_{\mathrm{floor}}$ is the configurable $DN^2$ variance floor. The floor
 prevents tiny or negative fitted tail-background values from receiving
 numerically dominant weights. Pixels at the ADC limit
 are excluded when saturation is enabled. The implementation records optimizer
@@ -648,13 +648,7 @@ The following register records the assumptions introduced so far. Each entry
 is also recorded in [docs/decisions.md](docs/decisions.md). Values are assumptions or
 calibrations for this exercise, not measurements of a deployed camera.
 
-\begingroup
-\scriptsize
-\sloppy
-\renewcommand{\arraystretch}{0.78}
-\setlength{\tabcolsep}{2.5pt}
-
-| ID    | Assumption or value                                                                                                                                                                          | Units                                          | Rationale                                                                                                                           | Expected effect                                                                                     | Validation or limitation                                               |
+| Identifier | Assumption or value                                                                                                                                                                      | Units                                          | Rationale                                                                                                                           | Expected effect                                                                                     | Validation or limitation                                               |
 | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | A-001 | Pixel centers are integer coordinates and boundaries are half a pixel away                                                                                                                   | pixels                                         | Maintains a consistent forward model                                                                                                | Affects phase and boundary behavior                                                                 | PSF tests                                                              |
 | A-002 | Arrays use `image[y, x]`; positions use `(x, y)`                                                                                                                                             | —                                              | Separates array and Cartesian conventions                                                                                           | Prevents axis swaps                                                                                 | Foundation tests                                                       |
@@ -695,8 +689,6 @@ calibrations for this exercise, not measurements of a deployed camera.
 | A-037 | Sensor-chain validation includes a non-unity 2-electron/DN conversion-gain case                                                                                                              | electrons/DN                                   | Ensures the nominal 1-electron/DN choice does not mask unit-ordering errors                                                         | Separates charge-domain clipping from DN conversion                                                 | ADC conversion-gain test                                               |
 | A-038 | GUI-only scene sweep uses independent beacon/background scaling with bounded exposure and simplified analog-gain response                                                                    | dimensionless, ms, gain                        | Demonstrates the optional day/night exposure concept without changing authoritative experiments                                     | Shows saturation recovery and low-light response qualitatively                                      | Headless GUI test; interactive review only                             |
 | A-039 | Jetson Orin validation uses the CPU NumPy/SciPy implementation and the same 200-frame, 20-warm-up estimator benchmark as the Mac reference                                                   | frames, ms                                     | Separates embedded-target portability evidence from the Mac reference while keeping the input contract paired                       | Measures platform-dependent estimator timing; does not cover camera, transfer, or gimbal latency    | Jetson runtime/dynamic artifacts; machine-load dependent               |
-
-\endgroup
 
 ## 11. Reproducibility and implementation status
 
@@ -819,12 +811,6 @@ but can be disabled for smaller runs.
 
 ## 12. Assignment traceability
 
-\begingroup
-\small
-\sloppy
-\renewcommand{\arraystretch}{0.86}
-\setlength{\tabcolsep}{3pt}
-
 | Assignment requirement                                                | Evidence                                                                          | Status                                                                                    |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | Configurable Gaussian spot at a known sub-pixel position              | Sections 2.1–2.2; PSF module; tests                                               | Implemented                                                                               |
@@ -846,8 +832,6 @@ but can be disabled for smaller runs.
 | Reproducible dynamic scenario and analysis                            | Section 8; dynamic outputs and repeat outputs                                     | Complete                                                                                  |
 | Optional live interactive demonstration                               | Section 11; live GUI module                                                       | Implemented                                                                               |
 | Optional automatic exposure/gain demonstration                        | Section 11; live GUI scene sweep and exposure controller                          | Implemented as a qualitative GUI-only extension; not hardware validated                   |
-
-\endgroup
 
 ## 13. Conclusion and future work
 
