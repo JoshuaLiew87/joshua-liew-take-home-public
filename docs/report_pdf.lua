@@ -21,7 +21,11 @@ function Pandoc(doc)
 
   local table_style = {
     ["10. assumptions and limitations"] = {
-      before = "\\begingroup\\scriptsize\\sloppy\\renewcommand{\\arraystretch}{0.78}\\setlength{\\tabcolsep}{3pt}\\exhyphenpenalty=10000\\hyphenpenalty=10000",
+      before = "\\begingroup\\scriptsize\\sloppy\\renewcommand{\\arraystretch}{0.78}\\setlength{\\tabcolsep}{4pt}\\exhyphenpenalty=10000\\hyphenpenalty=10000",
+      after = "\\endgroup",
+    },
+    ["11. reproducibility and implementation status"] = {
+      before = "\\begingroup\\small\\sloppy\\renewcommand{\\arraystretch}{0.90}\\setlength{\\tabcolsep}{4pt}",
       after = "\\endgroup",
     },
     ["12. assignment traceability"] = {
@@ -40,11 +44,16 @@ function Pandoc(doc)
         -- source Markdown portable for GitHub and other renderers.
         block.colspecs = {
           {pandoc.AlignDefault, 0.07},
-          {pandoc.AlignDefault, 0.32},
-          {pandoc.AlignDefault, 0.08},
-          {pandoc.AlignDefault, 0.22},
+          {pandoc.AlignDefault, 0.30},
+          {pandoc.AlignDefault, 0.11},
+          {pandoc.AlignDefault, 0.20},
           {pandoc.AlignDefault, 0.18},
-          {pandoc.AlignDefault, 0.13},
+          {pandoc.AlignDefault, 0.14},
+        }
+      elseif current_section == "11. reproducibility and implementation status" then
+        block.colspecs = {
+          {pandoc.AlignDefault, 0.22},
+          {pandoc.AlignDefault, 0.78},
         }
       end
       body:insert(pandoc.RawBlock("latex", style.before))

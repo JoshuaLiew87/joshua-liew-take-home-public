@@ -444,6 +444,7 @@ def plot_sweep(
     axes[0, 0].axhline(0.0, color="black", linewidth=0.8)
     axes[0, 0].legend()
     axes[0, 1].legend()
+    axes[1, 0].legend()
     failure_axis.legend(fontsize="small")
     figure.suptitle("Static sub-pixel localization characterization")
     figure.savefig(output, dpi=160)
