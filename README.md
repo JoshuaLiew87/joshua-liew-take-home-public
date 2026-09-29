@@ -2,7 +2,7 @@
 
 Simulation and Analysis of sub-pixel localization of a noisy laser beacon for a 
 camera-guided pointing and tracking system. Evaluation done on a MacBook Pro and 
-a Jetson Orin Nano. A live GUI is included for visualization.
+a NVIDIA Jetson Orin Nano Development Kit. A live GUI is included for visualization.
 
 ## Start here
 
@@ -113,13 +113,13 @@ machine and load dependent.
 | Clean theoretical reference | The ideal-model radial precision reference was 0.0564 px at SNR 10. | The CRLB is a clean-model reference, not a universal bound for the stressed sensor. |
 | Dynamic recovery | The 73 Hz disturbance was recovered within 0.007 Hz; 5,000-frame RMS tracking error was 0.164 px (centroid) and 0.082 px (Gaussian). | Both estimators recovered the injected periodic motion; the Gaussian fit gave lower error. |
 | Runtime (Mac reference) | Centroid median latency was 0.055 ms; the full Gaussian fit was 1.819 ms warm on the stressed profile. | The centroid is the Python low-latency baseline; Gaussian fitting is better suited to supervisory or compiled paths. |
-| Jetson target validation | On an NVIDIA Jetson Orin, centroid median latency was 0.485 ms and full Gaussian warm latency was 10.482 ms; seeded accuracy and dynamic metrics matched the Mac run to floating-point precision. | The centroid remains within the estimator-only 1 ms budget; the Gaussian fit remains a slower supervisory or compiled candidate. |
+| Jetson target validation | On the Jetson target, centroid median latency was 0.485 ms and full Gaussian warm latency was 10.482 ms; seeded accuracy and dynamic metrics matched the Mac run to floating-point precision. | The centroid remains within the estimator-only 1 ms budget; the Gaussian fit remains a slower supervisory or compiled candidate. |
 | Saturation stress | At 100× nominal flux, centroid RMSE was 0.363 px versus 0.007 px for the clipped-pixel-masked Gaussian fit. | Saturation handling materially changes estimator behavior. |
 
 See the report for uncertainty estimates, controlled ablations, assumptions,
 failure modes, and the exact output paths for every result.
 
-The Jetson validation used Ubuntu 22.04.5 on aarch64 with JetPack R36.4.3,
+The Jetson target-validation run used Ubuntu 22.04.5 on aarch64 with JetPack R36.4.3,
 Python 3.13.13, NumPy 2.5.3, and SciPy 1.18.1. It used the CPU NumPy/SciPy
 implementation; CUDA and TensorRT were not used. The saved runtime, dynamic
 summary, and manifest artifacts are in `results/performance/jetson_orin/`.
@@ -239,7 +239,7 @@ python -m experiments.live_gui \
 - Estimator ablation: `results/latest/results/estimator_ablation/`
 - Dynamic amplitude repeats: `results/latest/results/dynamic_repeats/`
 - Optional Gaussian tracking speed study: `results/performance/`
-- Jetson Orin target validation: `results/performance/jetson_orin/`
+- Jetson target validation: `results/performance/jetson_orin/`
 - Figures: `results/latest/figures/`
 - Standalone runtime command defaults: `results/runtime_sensor/` and
   `results/standalone/figures/` when `--output-dir` and `--figure` are omitted.

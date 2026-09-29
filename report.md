@@ -18,7 +18,8 @@ model the ranking reversed (90.1% versus 96.5%). When the spot was observable
 at SNR 10, the Gaussian fit achieved lower stressed-profile radial RMSE than
 the centroid (0.081 versus 0.161 pixels), but its Python implementation did not
 meet the 1 ms estimator budget, while the centroid remained below that budget
-on both the Mac reference system and Jetson Orin. The dynamic experiment
+on both the Mac reference system and the NVIDIA Jetson Orin Nano Development
+Kit. The dynamic experiment
 recovered the injected 73 Hz disturbance from a 5,000-frame trajectory, and a
 controlled outdoor-stress study examined scintillation, illumination, defocus,
 and saturation as distinct failure mechanisms. An optional live GUI that uses the
@@ -463,10 +464,10 @@ The raw sequential benchmark files are retained in
 `results/performance/gaussian_tracking_baseline/` and
 `results/performance/gaussian_tracking_fast/`.
 
-### 7.2 Jetson Orin target validation
+### 7.2 Jetson target validation
 
-The final workflow was also run on an NVIDIA Jetson Orin as a bounded embedded
-target-validation check. The host used JetPack R36.4.3 on Ubuntu 22.04.5
+The final workflow was also run on an NVIDIA Jetson Orin Nano Development Kit
+as a bounded embedded target-validation check. The host used JetPack R36.4.3 on Ubuntu 22.04.5
 (aarch64), Python 3.13.13, NumPy 2.5.3, and SciPy 1.18.1. This was the same
 200-frame, 20-warm-up estimator benchmark used for the Mac reference, with the
 full-quality stressed profile. The implementation is CPU-only; CUDA and
@@ -481,7 +482,7 @@ The seeded static and dynamic metrics matched the Mac reference to floating-
 point precision, including the SNR-10 RMSE values and 73 Hz disturbance
 recovery. The target run therefore validates portability of the scientific
 results, while showing that the Python Gaussian implementation has less timing
-margin on the Jetson. The result remains an estimator-only measurement and does
+margin on the Jetson target. The result remains an estimator-only measurement and does
 not establish end-to-end camera or gimbal latency. The saved CSV, JSON, dynamic
 summary, and run manifest are in `results/performance/jetson_orin/`.
 
@@ -688,7 +689,7 @@ calibrations for this exercise, not measurements of a deployed camera.
 | A-036 | Dynamic amplitude repeat uses five independent master seeds and 2,500 frames per seed at target SNR 10                                                                                       | seeds, frames, dimensionless                   | Quantifies finite-record amplitude variation without replacing the primary 5,000-frame result                                       | Gives uncertainty on the apparent amplitude bias; short records can weaken frequency recovery       | Repeat outputs and Figure 6                                            |
 | A-037 | Sensor-chain validation includes a non-unity 2-electron/DN conversion-gain case                                                                                                              | electrons/DN                                   | Ensures the nominal 1-electron/DN choice does not mask unit-ordering errors                                                         | Separates charge-domain clipping from DN conversion                                                 | ADC conversion-gain test                                               |
 | A-038 | GUI-only scene sweep uses independent beacon/background scaling with bounded exposure and simplified analog-gain response                                                                    | dimensionless, ms, gain                        | Demonstrates the optional day/night exposure concept without changing authoritative experiments                                     | Shows saturation recovery and low-light response qualitatively                                      | Headless GUI test; interactive review only                             |
-| A-039 | Jetson Orin validation uses the CPU NumPy/SciPy implementation and the same 200-frame, 20-warm-up estimator benchmark as the Mac reference                                                   | frames, ms                                     | Separates embedded-target portability evidence from the Mac reference while keeping the input contract paired                       | Measures platform-dependent estimator timing; does not cover camera, transfer, or gimbal latency    | Jetson runtime/dynamic artifacts; machine-load dependent               |
+| A-039 | Jetson target validation uses the CPU NumPy/SciPy implementation and the same 200-frame, 20-warm-up estimator benchmark as the Mac reference                                                   | frames, ms                                     | Separates embedded-target portability evidence from the Mac reference while keeping the input contract paired                       | Measures platform-dependent estimator timing; does not cover camera, transfer, or gimbal latency    | Jetson runtime/dynamic artifacts; machine-load dependent               |
 
 ## 11. Reproducibility and implementation status
 
@@ -719,7 +720,7 @@ dependent on machine load and operating-system scheduling.
 
 The Mac record above is the authoritative reference run for the checked-in
 figures and seeded results. An additional target-validation run was completed
-on an NVIDIA Jetson Orin (JetPack R36.4.3, Ubuntu 22.04.5, aarch64, Python
+on the Jetson target (JetPack R36.4.3, Ubuntu 22.04.5, aarch64, Python
 3.13.13, NumPy 2.5.3, SciPy 1.18.1). Its runtime and dynamic summary artifacts
 are preserved in `results/performance/jetson_orin/`. The two hosts produced the
 same seeded accuracy and dynamic metrics; only the machine-dependent estimator
@@ -851,7 +852,7 @@ pixels for the centroid and 0.0817 pixels for the Gaussian fit. The injected
 73 Hz disturbance was recovered at 72.9934 Hz and 72.9974 Hz, with amplitudes
 of 0.0563 and 0.0565 pixels against the injected 0.05-pixel value. The
 centroid latency was 0.055 ms on the Mac reference system and 0.485 ms on the
-Jetson Orin, while the full Gaussian fit required 1.819 ms and 10.482 ms,
+the Jetson target, while the full Gaussian fit required 1.819 ms and 10.482 ms,
 respectively. These results support using the centroid as the low-latency
 tracking estimator and reserving the Gaussian fit for slower supervisory
 processing or a compiled embedded implementation.

@@ -26,7 +26,7 @@ The final repository must provide:
 - Monte Carlo curves showing signed bias, standard deviation, RMSE, and failure rate versus SNR.
 - A theoretical position-precision reference derived from the simulator's forward model.
 - Runtime measurements including tail latency, not only average runtime.
-- A bounded target-validation runtime record on the NVIDIA Jetson Orin, kept separate from the Mac reference because timing is machine-dependent.
+- A bounded target-validation runtime record on the NVIDIA Jetson Orin Nano Development Kit, kept separate from the Mac reference because timing is machine-dependent.
 - A dynamic scenario with drift, jitter, and one periodic disturbance: 2,000 frames for development and up to 5,000 frames for the final result if the runtime remains acceptable.
 - Frequency and amplitude recovery results for the injected disturbance.
 - A written analysis of outdoor failure modes and possible detection/mitigation strategies.
@@ -403,7 +403,7 @@ Benchmark estimators on already-generated frames so simulator cost is not confus
 - cold-start and warm-start fit timing if both are considered.
 
 Benchmark the full Python implementation on the Mac reference development
-machine and on the NVIDIA Jetson Orin target-validation device. Record Python,
+machine and on the Jetson target-validation device. Record Python,
 NumPy, SciPy, platform, and JetPack/OS versions for both. Compare each
 estimator time to the 1 ms frame interval, while explicitly noting that camera
 transfer, preprocessing, synchronization, filtering, and gimbal output also
@@ -424,7 +424,7 @@ centroid cold-start and Gaussian cold/warm-start paths and records Python,
 NumPy, SciPy, and platform versions. The initial 200-frame SNR-10 benchmark
 has been run for both ideal and stressed profiles; final interpretation is
 documented in `report.md`. The same final stressed benchmark was subsequently
-run on the Jetson Orin; its runtime and dynamic-summary artifacts are retained
+run on the Jetson target; its runtime and dynamic-summary artifacts are retained
 under `results/performance/jetson_orin/`.
 
 ### Phase 4 follow-up: configurable Gaussian tracking speed study
