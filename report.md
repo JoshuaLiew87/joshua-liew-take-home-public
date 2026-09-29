@@ -852,7 +852,7 @@ pixels for the centroid and 0.0817 pixels for the Gaussian fit. The injected
 73 Hz disturbance was recovered at 72.9934 Hz and 72.9974 Hz, with amplitudes
 of 0.0563 and 0.0565 pixels against the injected 0.05-pixel value. The
 centroid latency was 0.055 ms on the Mac reference system and 0.485 ms on the
-the Jetson target, while the full Gaussian fit required 1.819 ms and 10.482 ms,
+Jetson target, while the full Gaussian fit required 1.819 ms and 10.482 ms,
 respectively. These results support using the centroid as the low-latency
 tracking estimator and reserving the Gaussian fit for slower supervisory
 processing or a compiled embedded implementation.

@@ -2,7 +2,7 @@
 
 Simulation and Analysis of sub-pixel localization of a noisy laser beacon for a 
 camera-guided pointing and tracking system. Evaluation done on a MacBook Pro and 
-a NVIDIA Jetson Orin Nano Development Kit. A live GUI is included for visualization.
+an NVIDIA Jetson Orin Nano Development Kit. A live GUI is included for visualization.
 
 ## Start here
 
@@ -106,15 +106,15 @@ The values below are from the seeded Mac reference run in `results/latest/`.
 The Jetson target-validation result is reported separately because runtime is
 machine and load dependent.
 
-| Experiment | Key result | Interpretation |
-|---|---|---|
-| Static localization | At SNR 10, radial RMSE was 0.161 px for the centroid and 0.081 px for the Gaussian fit in the stressed profile. | The Gaussian fit improved accuracy when the spot remained observable. |
-| Low-SNR lock loss | At SNR 1, stressed-profile lock loss was 96.5% for the centroid and 90.1% for the Gaussian fit. | Both methods become unreliable; failure accounting is essential. |
-| Clean theoretical reference | The ideal-model radial precision reference was 0.0564 px at SNR 10. | The CRLB is a clean-model reference, not a universal bound for the stressed sensor. |
-| Dynamic recovery | The 73 Hz disturbance was recovered within 0.007 Hz; 5,000-frame RMS tracking error was 0.164 px (centroid) and 0.082 px (Gaussian). | Both estimators recovered the injected periodic motion; the Gaussian fit gave lower error. |
-| Runtime (Mac reference) | Centroid median latency was 0.055 ms; the full Gaussian fit was 1.819 ms warm on the stressed profile. | The centroid is the Python low-latency baseline; Gaussian fitting is better suited to supervisory or compiled paths. |
-| Jetson target validation | On the Jetson target, centroid median latency was 0.485 ms and full Gaussian warm latency was 10.482 ms; seeded accuracy and dynamic metrics matched the Mac run to floating-point precision. | The centroid remains within the estimator-only 1 ms budget; the Gaussian fit remains a slower supervisory or compiled candidate. |
-| Saturation stress | At 100× nominal flux, centroid RMSE was 0.363 px versus 0.007 px for the clipped-pixel-masked Gaussian fit. | Saturation handling materially changes estimator behavior. |
+| Experiment                  | Key result                                                                                                                                                                                    | Interpretation                                                                                                                   |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Static localization         | At SNR 10, radial RMSE was 0.161 px for the centroid and 0.081 px for the Gaussian fit in the stressed profile.                                                                               | The Gaussian fit improved accuracy when the spot remained observable.                                                            |
+| Low-SNR lock loss           | At SNR 1, stressed-profile lock loss was 96.5% for the centroid and 90.1% for the Gaussian fit.                                                                                               | Both methods become unreliable; failure accounting is essential.                                                                 |
+| Clean theoretical reference | The ideal-model radial precision reference was 0.0564 px at SNR 10.                                                                                                                           | The CRLB is a clean-model reference, not a universal bound for the stressed sensor.                                              |
+| Dynamic recovery            | The 73 Hz disturbance was recovered within 0.007 Hz; 5,000-frame RMS tracking error was 0.164 px (centroid) and 0.082 px (Gaussian).                                                          | Both estimators recovered the injected periodic motion; the Gaussian fit gave lower error.                                       |
+| Runtime (Mac reference)     | Centroid median latency was 0.055 ms; the full Gaussian fit was 1.819 ms warm on the stressed profile.                                                                                        | The centroid is the Python low-latency baseline; Gaussian fitting is better suited to supervisory or compiled paths.             |
+| Jetson target validation    | On the Jetson target, centroid median latency was 0.485 ms and full Gaussian warm latency was 10.482 ms; seeded accuracy and dynamic metrics matched the Mac run to floating-point precision. | The centroid remains within the estimator-only 1 ms budget; the Gaussian fit remains a slower supervisory or compiled candidate. |
+| Saturation stress           | At 100× nominal flux, centroid RMSE was 0.363 px versus 0.007 px for the clipped-pixel-masked Gaussian fit.                                                                                   | Saturation handling materially changes estimator behavior.                                                                       |
 
 See the report for uncertainty estimates, controlled ablations, assumptions,
 failure modes, and the exact output paths for every result.
