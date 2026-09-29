@@ -513,7 +513,7 @@ constant and linear trend. This separates slow drift from the intentional
 periodic component without claiming more frequency resolution than the
 5,000-sample record provides.
 
-| Estimator         | RMS error [px] | 95th percentile [px] | Estimated frequency [Hz] | Frequency error [Hz] | Estimated amplitude [px] | Amplitude error [px] | Peak/noise |
+| Estimator         | RMS error [px] | 95th percentile [px] | Estimated frequency [Hz] | Frequency error [Hz] | Estimated amplitude [px] | Amplitude error [px] | Peak/<br>noise |
 | ----------------- | -------------: | -------------------: | -----------------------: | -------------------: | -----------------------: | -------------------: | ---------: |
 | Windowed centroid |         0.1636 |               0.2782 |                  72.9934 |               0.0066 |                   0.0563 |               0.0063 |       14.6 |
 | Gaussian fit      |         0.0817 |               0.1405 |                  72.9974 |               0.0026 |                   0.0565 |               0.0065 |       25.4 |
@@ -710,8 +710,10 @@ environment on the following development system:
 | Reproduction command | `python run_all.py --config configs/final.yaml`                                                                                                                                                              |
 
 The run manifest records the configuration, software versions, seed, and
-generated files in
-[`results/latest/run_manifest.json`](results/latest/run_manifest.json).
+generated files in the following file:
+
+[`results/latest/run_manifest.json`](results/latest/run_manifest.json)
+
 Seeded simulation outputs are deterministic; runtime measurements remain
 dependent on machine load and operating-system scheduling.
 

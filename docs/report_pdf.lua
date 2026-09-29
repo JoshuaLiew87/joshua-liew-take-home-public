@@ -28,6 +28,10 @@ function Pandoc(doc)
       before = "\\begingroup\\small\\sloppy\\renewcommand{\\arraystretch}{0.90}\\setlength{\\tabcolsep}{4pt}",
       after = "\\endgroup",
     },
+    ["8. dynamic tracking and disturbance recovery"] = {
+      before = "\\begingroup\\scriptsize\\sloppy\\renewcommand{\\arraystretch}{0.88}\\setlength{\\tabcolsep}{3pt}",
+      after = "\\endgroup",
+    },
     ["12. assignment traceability"] = {
       before = "\\begingroup\\small\\sloppy\\renewcommand{\\arraystretch}{0.86}\\setlength{\\tabcolsep}{3pt}",
       after = "\\endgroup",
@@ -54,6 +58,23 @@ function Pandoc(doc)
         block.colspecs = {
           {pandoc.AlignDefault, 0.22},
           {pandoc.AlignDefault, 0.78},
+        }
+      elseif current_section == "8. dynamic tracking and disturbance recovery" then
+        block.colspecs = {
+          {pandoc.AlignDefault, 0.15},
+          {pandoc.AlignDefault, 0.09},
+          {pandoc.AlignDefault, 0.13},
+          {pandoc.AlignDefault, 0.15},
+          {pandoc.AlignDefault, 0.13},
+          {pandoc.AlignDefault, 0.15},
+          {pandoc.AlignDefault, 0.13},
+          {pandoc.AlignDefault, 0.07},
+        }
+        -- Keep the compact dynamic summary readable in the PDF: Pandoc's
+        -- LaTeX writer otherwise collapses the Markdown <br> in Peak/<br>noise.
+        local peak_noise_header = block.head.rows[1].cells[8]
+        peak_noise_header.contents = {
+          pandoc.Plain({pandoc.Str("Peak/"), pandoc.LineBreak(), pandoc.Str("noise")}),
         }
       end
       body:insert(pandoc.RawBlock("latex", style.before))
