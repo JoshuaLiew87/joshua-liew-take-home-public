@@ -1,7 +1,8 @@
 # Sub-pixel laser spot localization
 
-Sub-pixel localization of a noisy laser beacon for a camera-guided pointing
-and tracking system.
+Simulation and Analysis of sub-pixel localization of a noisy laser beacon for a 
+camera-guided pointing and tracking system. Evaluation done on a MacBook Pro and 
+a Jetson Orin Nano. A live GUI is included for visualization.
 
 ## Start here
 
