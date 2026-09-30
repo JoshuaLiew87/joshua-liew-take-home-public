@@ -140,7 +140,6 @@ transcelestial-spot-localization/
 ├── results/
 ├── report.md
 └── docs/
-    ├── assignment_spec.md
     ├── plan.md
     ├── decisions.md
     └── methodology_flowchart.md
