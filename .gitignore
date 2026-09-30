@@ -9,3 +9,6 @@ __pycache__/
 
 # Local virtual environment
 .venv/
+
+# Assignment materials intentionally excluded from the public repository
+docs/assignment_spec.md
