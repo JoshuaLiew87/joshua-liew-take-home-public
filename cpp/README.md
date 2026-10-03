@@ -33,6 +33,17 @@ python run_all.py \
   --results-dir results_cpp
 ```
 
+For a complete Jetson target-validation run, keep the output separate from
+the Mac comparison:
+
+```bash
+python run_all.py \
+  --config configs/cpp_gaussian.yaml \
+  --output-root /tmp/jetson-cpp-benchmark/full \
+  --results-dir results_cpp \
+  --run-id jetson_cpp_full
+```
+
 The generated shared library and build directory are ignored by Git. The
 extension must be rebuilt separately on each operating system and Python
 environment, including the Jetson target.

@@ -3,9 +3,10 @@
 This is the `feature/cpp-gaussian-accelerator` branch of the sub-pixel laser
 localization study. It preserves the Python reference pipeline and adds an
 optional `pybind11` implementation of the Gaussian model and analytical
-Jacobian for a controlled speed comparison. Evaluation was performed on a
-MacBook Pro; the original CPU Python implementation was also validated on an
-NVIDIA Jetson Orin Nano Development Kit.
+Jacobian for a controlled speed comparison. The checked-in comparison was
+performed on a MacBook Pro, and the backend was subsequently built and
+validated on an NVIDIA Jetson Orin Nano Engineering Reference Developer Kit
+running JetPack R36.4.3 and Ubuntu 22.04.5.
 
 ## Start here
 
@@ -152,6 +153,18 @@ The command regenerates the nine-stage study and writes the latest snapshot
 to `results_cpp/latest/`. The branch-specific comparison is summarized in
 [`report_cpp.md`](report_cpp.md), while the full result files are listed in
 [`results_cpp/latest/run_manifest.json`](results_cpp/latest/run_manifest.json).
+For a separate Jetson target-validation run, use an isolated output root:
+
+```bash
+python run_all.py \
+  --config configs/cpp_gaussian.yaml \
+  --output-root /tmp/jetson-cpp-benchmark/full \
+  --results-dir results_cpp \
+  --run-id jetson_cpp_full
+```
+
+The preserved Jetson full/fast summaries and matched-contract runtime
+comparisons are under `results/performance/jetson_cpp/`.
 
 ### What should and should not change
 
@@ -163,6 +176,10 @@ difference is approximately `1.3e-8`, and every non-runtime figure is
 pixel-identical. Runtime measurements and runtime figures are expected to
 change because they measure a different implementation. They remain
 machine-load dependent and are not evidence of a deterministic 1 kHz system.
+The Jetson validation preserved the full-profile seeded non-runtime agreement
+while retaining the documented fast-profile SNR-1000 convergence-boundary
+difference. The C++ kernel reduces, but does not eliminate, Gaussian latency on
+the embedded CPU.
 
 ## Consolidated branch results
 
@@ -186,18 +203,27 @@ comes from the reduced optimizer budget.
 
 ### Runtime
 
-| Configuration | Sequence | Warm median | Warm p95 | Warm p99 | Worst | >1 ms |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| Full Python | Fixed stressed | 1.819 ms | 2.059 ms | 2.218 ms | 2.246 ms | 100% |
-| Full C++ model/Jacobian | Fixed stressed | 0.960 ms | 1.369 ms | 2.290 ms | 2.705 ms | 33.5% |
-| Fast Python | Dynamic | 0.972 ms | 1.147 ms | 1.260 ms | 1.300 ms | 46% |
-| Fast C++ model/Jacobian | Dynamic | 0.506 ms | 0.590 ms | 0.656 ms | 0.697 ms | 0% |
+| Target | Configuration | Sequence | Warm median | Warm p95 | Warm p99 | Worst | >1 ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Mac reference | Full Python | Fixed stressed | 1.819 ms | 2.059 ms | 2.218 ms | 2.246 ms | 100% |
+| Mac reference | Full C++ model/Jacobian | Fixed stressed | 0.960 ms | 1.369 ms | 2.290 ms | 2.705 ms | 33.5% |
+| Mac reference | Fast Python | Dynamic | 0.972 ms | 1.147 ms | 1.260 ms | 1.300 ms | 46% |
+| Mac reference | Fast C++ model/Jacobian | Dynamic | 0.506 ms | 0.590 ms | 0.656 ms | 0.697 ms | 0% |
+| Jetson Orin Nano | Full Python | Fixed | 10.477 ms | 12.361 ms | 13.358 ms | 13.405 ms | 100% |
+| Jetson Orin Nano | Full C++ model/Jacobian | Fixed | 5.743 ms | 6.668 ms | 7.220 ms | 7.286 ms | 100% |
+| Jetson Orin Nano | Fast Python | Dynamic | 5.918 ms | 6.938 ms | 7.834 ms | 7.897 ms | 100% |
+| Jetson Orin Nano | Fast C++ model/Jacobian | Dynamic | 3.384 ms | 3.948 ms | 4.372 ms | 4.419 ms | 100% |
 
 The full C++ backend reduces median latency by approximately 1.9× without
 changing full-quality accuracy. Combining it with the fast settings reduces
 median latency by approximately 1.92× relative to fast Python. The full and
 fast runtime rows use fixed and dynamic sequences respectively, so they are
 not a single like-for-like latency ranking.
+
+The Jetson rows use the same matched-contract benchmark and show 1.82× and
+1.75× C++ speedups for the full and fast profiles respectively. All four
+Gaussian configurations still exceeded the 1 ms budget at p99; the centroid
+remained approximately 0.48 ms with no deadline misses.
 
 Run the full test suite after the extension build:
 
@@ -239,16 +265,18 @@ machine and load dependent.
 | Clean theoretical reference | The ideal-model radial precision reference was 0.0564 px at SNR 10.                                                                                                                           | The CRLB is a clean-model reference, not a universal bound for the stressed sensor.                                              |
 | Dynamic recovery            | The 73 Hz disturbance was recovered within 0.007 Hz; 5,000-frame RMS tracking error was 0.164 px (centroid) and 0.082 px (Gaussian).                                                          | Both estimators recovered the injected periodic motion; the Gaussian fit gave lower error.                                       |
 | Runtime (Mac reference)     | Centroid median latency was 0.055 ms; the full Gaussian fit was 1.819 ms warm on the stressed profile.                                                                                        | The centroid is the Python low-latency baseline; Gaussian fitting is better suited to supervisory or compiled paths.             |
-| Jetson target validation    | On the Jetson target, centroid median latency was 0.485 ms and full Gaussian warm latency was 10.482 ms; seeded accuracy and dynamic metrics matched the Mac run to floating-point precision. | The centroid remains within the estimator-only 1 ms budget; the Gaussian fit remains a slower supervisory or compiled candidate. |
+| Jetson C++ target validation | On the Jetson target, full C++ Gaussian warm latency was 5.743 ms and fast C++ Gaussian warm latency was 3.384 ms; seeded accuracy and dynamic metrics matched the reference.                     | The C++ kernel provides a useful speedup but neither Gaussian configuration meets the 1 ms estimator-only budget on this target. |
 | Saturation stress           | At 100× nominal flux, centroid RMSE was 0.363 px versus 0.007 px for the clipped-pixel-masked Gaussian fit.                                                                                   | Saturation handling materially changes estimator behavior.                                                                       |
 
 See the report for uncertainty estimates, controlled ablations, assumptions,
 failure modes, and the exact output paths for every result.
 
-The Jetson target-validation run used Ubuntu 22.04.5 on aarch64 with JetPack R36.4.3,
-Python 3.13.13, NumPy 2.5.3, and SciPy 1.18.1. It used the CPU NumPy/SciPy
-implementation; CUDA and TensorRT were not used. The saved runtime, dynamic
-summary, and manifest artifacts are in `results/performance/jetson_orin/`.
+The Jetson C++ target-validation run used the NVIDIA Jetson Orin Nano Engineering
+Reference Developer Kit with JetPack R36.4.3, Ubuntu 22.04.5, Python 3.13.13,
+NumPy 2.5.3, SciPy 1.18.1, pybind11 3.1.0, and GCC 11.4.0. The C++ extension was
+compiled for aarch64. CUDA and TensorRT were not used by this backend. The
+saved full/fast runtime, dynamic-summary, and manifest artifacts are in
+`results/performance/jetson_cpp/`.
 
 ![Static sensor characterization](docs/figures/final_sensor_characterization.png)
 
@@ -364,7 +392,8 @@ python -m experiments.live_gui \
 - Estimator ablation: `results/latest/results/estimator_ablation/`
 - Dynamic amplitude repeats: `results/latest/results/dynamic_repeats/`
 - Optional Gaussian tracking speed study: `results/performance/`
-- Jetson target validation: `results/performance/jetson_orin/`
+- Jetson Python target validation: `results/performance/jetson_orin/`
+- Jetson C++ target validation: `results/performance/jetson_cpp/`
 - Figures: `results/latest/figures/`
 - Standalone runtime command defaults: `results/runtime_sensor/` and
   `results/standalone/figures/` when `--output-dir` and `--figure` are omitted.

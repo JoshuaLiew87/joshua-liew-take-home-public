@@ -1,0 +1,136 @@
+{
+  "configuration": {
+    "background": {
+      "gradient_x_e_per_px": 0.25,
+      "gradient_y_e_per_px": -0.15,
+      "offset_e": 20.0
+    },
+    "estimator": {
+      "background_border_width_px": 2,
+      "background_fit_plane": true,
+      "centroid_clip_negative": true,
+      "centroid_roi_size_px": 13,
+      "gaussian_backend": "cpp",
+      "gaussian_irls_iterations": 1,
+      "gaussian_roi_size_px": 13,
+      "gaussian_sigma_max_px": 5.0,
+      "gaussian_sigma_min_px": 0.5,
+      "gaussian_skip_centroid_with_previous": true,
+      "gaussian_tracking_use_previous_roi": true,
+      "gaussian_variance_floor_dn2": 1.0,
+      "minimum_signal_dn": 1e-09,
+      "optimizer_max_nfev": 30
+    },
+    "experiment": {
+      "development_trials": 200,
+      "master_seed": 20260925,
+      "monte_carlo_trials": 1000,
+      "snr_sweep": [
+        1.0,
+        3.0,
+        10.0,
+        30.0,
+        100.0,
+        300.0,
+        1000.0
+      ],
+      "target_snr": 10.0
+    },
+    "name": "dynamic",
+    "noise": {
+      "background_enabled": true,
+      "dark_current_enabled": true,
+      "hot_pixels_enabled": true,
+      "photon_shot_enabled": true,
+      "prnu_enabled": true,
+      "read_noise_enabled": true
+    },
+    "pattern": {
+      "dark_current_e_per_s": 50.0,
+      "hot_pixel_count": 4,
+      "hot_pixel_dark_current_e_per_s": 5000.0,
+      "prnu_std_fraction": 0.01
+    },
+    "sensor": {
+      "bit_depth": 12,
+      "electrons_per_dn": 1.0,
+      "exposure_s": 0.001,
+      "frame_rate_hz": 1000.0,
+      "full_well_e": 4095.0,
+      "height_px": 32,
+      "quantization_enabled": true,
+      "read_noise_e_rms": 3.0,
+      "saturation_enabled": true,
+      "width_px": 32
+    },
+    "spot": {
+      "position_margin_px": 8.0,
+      "sigma_px": 1.75,
+      "sigma_rms_fraction": 0.05,
+      "total_flux_e": 1000.0
+    },
+    "trajectory": {
+      "center_x_px": 15.5,
+      "center_y_px": 15.5,
+      "development_frame_count": 2000,
+      "disturbance_amplitude_px": 0.05,
+      "disturbance_axis": "x",
+      "disturbance_frequency_hz": 73.0,
+      "drift_amplitude_px": 1.5,
+      "drift_frequency_hz": 0.4,
+      "drift_model": "ou",
+      "final_frame_count": 5000,
+      "frame_rate_hz": 1000.0,
+      "jitter_correlation": 0.95,
+      "jitter_rms_px": 0.04,
+      "ou_bound_px": 2.0,
+      "ou_correlation_time_s": 0.25,
+      "ou_drift_rms_px": 0.6
+    }
+  },
+  "lock_threshold_px": 1.0,
+  "summaries": [
+    {
+      "amplitude_abs_error_px": 0.006253053876281604,
+      "disturbance_axis": "x",
+      "estimated_amplitude_px": 0.05625305387628161,
+      "estimated_frequency_hz": 72.9934484595316,
+      "estimator": "centroid",
+      "failure_count": 0,
+      "failure_rate": 0.0,
+      "frame_count": 5000,
+      "frequency_abs_error_hz": 0.0065515404683935685,
+      "lock_failure_count": 0,
+      "lock_failure_rate": 0.0,
+      "p95_error_px": 0.27817484496885936,
+      "peak_to_noise_ratio": 14.614978191184964,
+      "rms_error_px": 0.16357403078053234,
+      "spectral_noise_floor_px": 0.003849000192843988,
+      "target_snr": 10.0,
+      "true_amplitude_px": 0.05,
+      "true_frequency_hz": 73.0,
+      "valid_count": 5000
+    },
+    {
+      "amplitude_abs_error_px": 0.006506569242312715,
+      "disturbance_axis": "x",
+      "estimated_amplitude_px": 0.05650656924231272,
+      "estimated_frequency_hz": 72.99821412622458,
+      "estimator": "gaussian",
+      "failure_count": 0,
+      "failure_rate": 0.0,
+      "frame_count": 5000,
+      "frequency_abs_error_hz": 0.0017858737754181675,
+      "lock_failure_count": 0,
+      "lock_failure_rate": 0.0,
+      "p95_error_px": 0.14320522392973253,
+      "peak_to_noise_ratio": 24.789321089639664,
+      "rms_error_px": 0.08387606924150932,
+      "spectral_noise_floor_px": 0.0022794722387911148,
+      "target_snr": 10.0,
+      "true_amplitude_px": 0.05,
+      "true_frequency_hz": 73.0,
+      "valid_count": 5000
+    }
+  ]
+}
