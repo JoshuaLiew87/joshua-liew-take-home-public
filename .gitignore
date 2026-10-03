@@ -12,3 +12,9 @@ __pycache__/
 
 # Assignment materials intentionally excluded from the public repository
 docs/assignment_spec.md
+
+# Optional native-extension build artifacts
+build/
+*.so
+*.dylib
+*.pyd

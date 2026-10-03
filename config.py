@@ -139,6 +139,7 @@ class EstimatorConfig:
     optimizer_max_nfev: int = 100
     gaussian_tracking_use_previous_roi: bool = False
     gaussian_skip_centroid_with_previous: bool = True
+    gaussian_backend: Literal["python", "cpp"] = "python"
 
     def validate(self) -> None:
         for name, size in (
@@ -159,6 +160,8 @@ class EstimatorConfig:
             raise ValueError("gaussian_variance_floor_dn2 must be positive")
         if self.optimizer_max_nfev <= 0:
             raise ValueError("optimizer_max_nfev must be positive")
+        if self.gaussian_backend not in ("python", "cpp"):
+            raise ValueError("gaussian_backend must be 'python' or 'cpp'")
 
 
 @dataclass(frozen=True)

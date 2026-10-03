@@ -19,6 +19,11 @@ from estimators.common import (
     fit_background_plane,
 )
 
+try:
+    from estimators._gaussian_model import model_and_jacobian as _cpp_model_and_jacobian
+except ImportError:  # Optional branch-local acceleration extension.
+    _cpp_model_and_jacobian = None
+
 _SQRT_2PI = sqrt(2.0 * np.pi)
 
 
@@ -46,12 +51,30 @@ def pixel_integrated_gaussian_model_and_jacobian(
     x_coords: np.ndarray,
     y_coords: np.ndarray,
     background_center_xy: tuple[float, float],
+    backend: str = "python",
 ) -> tuple[np.ndarray, np.ndarray]:
     """Evaluate the Gaussian model and its analytical parameter Jacobian.
 
     Parameters are ``[x0, y0, total_flux_dn, sigma_px, b0, bx, by]`` and the
     background is ``b0 + bx*(x-cx) + by*(y-cy)``.
     """
+
+    if backend not in {"python", "cpp"}:
+        raise ValueError("backend must be 'python' or 'cpp'")
+    if backend == "cpp":
+        if _cpp_model_and_jacobian is None:
+            raise RuntimeError(
+                "C++ Gaussian backend is unavailable; build the optional extension first"
+            )
+        center_x, center_y = background_center_xy
+        model, jacobian = _cpp_model_and_jacobian(
+            np.asarray(parameters, dtype=float),
+            np.asarray(x_coords, dtype=float),
+            np.asarray(y_coords, dtype=float),
+            float(center_x),
+            float(center_y),
+        )
+        return np.asarray(model, dtype=float), np.asarray(jacobian, dtype=float)
 
     x0, y0, total_flux, sigma, b0, bx, by = np.asarray(parameters, dtype=float)
     if sigma <= 0:
@@ -91,6 +114,7 @@ def estimate_gaussian(
 
     method = "pixel_integrated_gaussian"
     image = np.asarray(image_dn, dtype=float)
+    backend = config.estimator.gaussian_backend
     saturation_limit = config.sensor.adc_max_dn if config.sensor.saturation_enabled else None
     previous_is_valid = previous_position is not None and len(previous_position) == 2 and all(
         np.isfinite(previous_position)
@@ -191,7 +215,7 @@ def estimate_gaussian(
     try:
         for _ in range(config.estimator.gaussian_irls_iterations):
             model, _ = pixel_integrated_gaussian_model_and_jacobian(
-                parameters, roi.x_coords, roi.y_coords, center_xy
+                parameters, roi.x_coords, roi.y_coords, center_xy, backend=backend
             )
             variance_dn = np.maximum(
                 model.ravel() / electrons_per_dn,
@@ -202,13 +226,13 @@ def estimate_gaussian(
 
             def residual(candidate: np.ndarray) -> np.ndarray:
                 candidate_model, _ = pixel_integrated_gaussian_model_and_jacobian(
-                    candidate, roi.x_coords, roi.y_coords, center_xy
+                    candidate, roi.x_coords, roi.y_coords, center_xy, backend=backend
                 )
                 return (candidate_model.ravel()[valid.ravel()] - data) * weights
 
             def jacobian(candidate: np.ndarray) -> np.ndarray:
                 _, candidate_jacobian = pixel_integrated_gaussian_model_and_jacobian(
-                    candidate, roi.x_coords, roi.y_coords, center_xy
+                    candidate, roi.x_coords, roi.y_coords, center_xy, backend=backend
                 )
                 return candidate_jacobian[valid.ravel(), :] * weights[:, None]
 
