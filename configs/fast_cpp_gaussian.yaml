@@ -1,0 +1,24 @@
+# Optional combined performance-study profile.
+# This applies the fast tracking settings and the compiled Gaussian
+# model/Jacobian; it is not the authoritative full-quality configuration.
+
+pipeline:
+  master_seed: 20260925
+
+profiles:
+  sensor:
+    estimator:
+      gaussian_backend: cpp
+      gaussian_roi_size_px: 13
+      gaussian_irls_iterations: 1
+      optimizer_max_nfev: 30
+      gaussian_tracking_use_previous_roi: true
+      gaussian_skip_centroid_with_previous: true
+  dynamic:
+    estimator:
+      gaussian_backend: cpp
+      gaussian_roi_size_px: 13
+      gaussian_irls_iterations: 1
+      optimizer_max_nfev: 30
+      gaussian_tracking_use_previous_roi: true
+      gaussian_skip_centroid_with_previous: true
