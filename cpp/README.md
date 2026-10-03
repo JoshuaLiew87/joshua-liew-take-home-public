@@ -25,6 +25,14 @@ and Python IRLS loop. Only the model and Jacobian evaluation are compiled in
 this first step, allowing direct numerical comparison with the reference
 implementation before moving more of the optimization loop to C++.
 
+To run the full comparison without overwriting the Python results:
+
+```bash
+python run_all.py \
+  --config configs/cpp_gaussian.yaml \
+  --results-dir results_cpp
+```
+
 The generated shared library and build directory are ignored by Git. The
 extension must be rebuilt separately on each operating system and Python
 environment, including the Jetson target.

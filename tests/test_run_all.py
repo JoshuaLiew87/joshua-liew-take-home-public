@@ -32,3 +32,24 @@ def test_run_pipeline_writes_declared_outputs(tmp_path: Path) -> None:
         (tmp_path / "results" / "latest" / relative_path).is_file()
         for relative_path in manifest["generated_files"]
     )
+
+
+def test_run_pipeline_supports_separate_results_directory(tmp_path: Path) -> None:
+    manifest = run_pipeline(
+        tmp_path,
+        results_dir="results_cpp",
+        static_trials=4,
+        roi_trials=4,
+        runtime_frames=5,
+        runtime_warmup=1,
+        dynamic_frames=200,
+        real_world_trials=4,
+        run_id="cpp-run",
+        master_seed=12345,
+    )
+
+    assert manifest["latest_directory"] == "results_cpp/latest"
+    run_root = tmp_path / "results_cpp" / "runs" / "cpp-run"
+    assert (run_root / "run_manifest.json").is_file()
+    assert (tmp_path / "results_cpp" / "latest" / "run_manifest.json").is_file()
+    assert not (tmp_path / "results" / "latest").exists()

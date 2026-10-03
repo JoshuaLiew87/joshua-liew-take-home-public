@@ -319,6 +319,7 @@ def _make_run_id(results_root: Path, requested_run_id: str | None) -> str:
 def run_pipeline(
     output_root: str | Path = ".",
     *,
+    results_dir: str | Path = "results",
     static_trials: int | None = None,
     roi_trials: int | None = None,
     runtime_frames: int = 200,
@@ -338,14 +339,18 @@ def run_pipeline(
     """Run every required experiment and save its final outputs.
 
     Each invocation receives a timestamped directory under
-    ``results/runs/``.  ``results/latest/`` is refreshed as a stable snapshot
-    of that run for report links.  Runtime measurements are expected to vary
-    slightly with machine load, while seeded simulation products are
+    ``results_dir/runs/``.  ``results_dir/latest/`` is refreshed as a stable
+    snapshot of that run for report links. Runtime measurements are expected
+    to vary slightly with machine load, while seeded simulation products are
     deterministic.
     """
 
     root = Path(output_root).resolve()
-    results_root = root / "results"
+    results_path = Path(results_dir)
+    if results_path.is_absolute() or not results_path.parts or ".." in results_path.parts:
+        raise ValueError("results_dir must be a non-empty relative directory")
+    results_root = root / results_path
+    results_label = results_path.as_posix()
     run_id = _make_run_id(results_root, run_id)
     run_root = results_root / "runs" / run_id
     run_results_root = run_root / "results"
@@ -603,7 +608,7 @@ def run_pipeline(
         "run_id": run_id,
         "output_root": str(root),
         "run_directory": str(run_root.relative_to(root)),
-        "latest_directory": "results/latest",
+        "latest_directory": f"{results_label}/latest",
         "software": _software_versions(),
         "seed": sensor.experiment.master_seed,
         "parameters": {
@@ -644,6 +649,11 @@ def parse_args() -> argparse.Namespace:
         "--output-root",
         default=".",
         help="repository or staging directory receiving results/runs/",
+    )
+    parser.add_argument(
+        "--results-dir",
+        default="results",
+        help="relative results directory below the output root (default: results)",
     )
     parser.add_argument(
         "--run-id",
@@ -722,6 +732,7 @@ def main() -> None:
         )
     manifest = run_pipeline(
         args.output_root,
+        results_dir=args.results_dir,
         run_id=args.run_id,
         profile_overrides=yaml_document["profiles"],
         yaml_overrides=yaml_document if args.config is not None else None,

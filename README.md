@@ -100,6 +100,24 @@ The centroid is the low-latency baseline. The Gaussian fit is generally more
 accurate when the spot is observable, but is more computationally expensive
 and can lose lock at very low SNR or under model mismatch.
 
+## Optional C++ backend
+
+The feature branch `feature/cpp-gaussian-accelerator` contains an optional
+`pybind11` implementation of the pixel-integrated Gaussian model and
+analytical Jacobian. The Python IRLS loop and bounded SciPy TRF optimizer
+remain unchanged, with Python still the default backend. See
+[`cpp/README.md`](cpp/README.md) for build instructions. Its comparison run
+can be kept separate from the authoritative Python results with:
+
+```bash
+python run_all.py \
+  --config configs/cpp_gaussian.yaml \
+  --results-dir results_cpp
+```
+
+The branch-specific comparison is summarized in
+[`report_cpp.md`](report_cpp.md).
+
 ## Key results
 
 The values below are from the seeded Mac reference run in `results/latest/`.

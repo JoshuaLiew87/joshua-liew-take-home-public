@@ -1,0 +1,163 @@
+{
+  "configuration": {
+    "background": {
+      "gradient_x_e_per_px": 0.0,
+      "gradient_y_e_per_px": 0.0,
+      "offset_e": 0.0
+    },
+    "estimator": {
+      "background_border_width_px": 2,
+      "background_fit_plane": true,
+      "centroid_clip_negative": true,
+      "centroid_roi_size_px": 13,
+      "gaussian_backend": "cpp",
+      "gaussian_irls_iterations": 2,
+      "gaussian_roi_size_px": 15,
+      "gaussian_sigma_max_px": 5.0,
+      "gaussian_sigma_min_px": 0.5,
+      "gaussian_skip_centroid_with_previous": true,
+      "gaussian_tracking_use_previous_roi": false,
+      "gaussian_variance_floor_dn2": 1.0,
+      "minimum_signal_dn": 1e-09,
+      "optimizer_max_nfev": 100
+    },
+    "experiment": {
+      "development_trials": 200,
+      "master_seed": 20260925,
+      "monte_carlo_trials": 1000,
+      "snr_sweep": [
+        1.0,
+        3.0,
+        10.0,
+        30.0,
+        100.0,
+        300.0,
+        1000.0
+      ],
+      "target_snr": 10.0
+    },
+    "name": "ideal",
+    "noise": {
+      "background_enabled": false,
+      "dark_current_enabled": false,
+      "hot_pixels_enabled": false,
+      "photon_shot_enabled": true,
+      "prnu_enabled": false,
+      "read_noise_enabled": false
+    },
+    "pattern": {
+      "dark_current_e_per_s": 0.0,
+      "hot_pixel_count": 0,
+      "hot_pixel_dark_current_e_per_s": 5000.0,
+      "prnu_std_fraction": 0.0
+    },
+    "sensor": {
+      "bit_depth": 12,
+      "electrons_per_dn": 1.0,
+      "exposure_s": 0.001,
+      "frame_rate_hz": 1000.0,
+      "full_well_e": 4095.0,
+      "height_px": 32,
+      "quantization_enabled": false,
+      "read_noise_e_rms": 0.0,
+      "saturation_enabled": false,
+      "width_px": 32
+    },
+    "spot": {
+      "position_margin_px": 8.0,
+      "sigma_px": 1.75,
+      "sigma_rms_fraction": 0.0,
+      "total_flux_e": 1000.0
+    },
+    "trajectory": {
+      "center_x_px": 15.5,
+      "center_y_px": 15.5,
+      "development_frame_count": 2000,
+      "disturbance_amplitude_px": 0.05,
+      "disturbance_axis": "x",
+      "disturbance_frequency_hz": 73.0,
+      "drift_amplitude_px": 1.5,
+      "drift_frequency_hz": 0.4,
+      "drift_model": "sinusoidal",
+      "final_frame_count": 5000,
+      "frame_rate_hz": 1000.0,
+      "jitter_correlation": 0.95,
+      "jitter_rms_px": 0.04,
+      "ou_bound_px": 2.0,
+      "ou_correlation_time_s": 0.25,
+      "ou_drift_rms_px": 0.6
+    }
+  },
+  "frame_interval_ms": 1.0,
+  "software": {
+    "numpy": "2.5.3",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "python": "3.13.1",
+    "scipy": "1.18.1"
+  },
+  "summaries": [
+    {
+      "deadline_miss_count": 0,
+      "deadline_miss_rate": 0.0,
+      "estimator": "centroid",
+      "failure_count": 0,
+      "failure_rate": 0.0,
+      "frame_count": 200,
+      "initialization": "cold",
+      "mean_ms": 0.05647895,
+      "median_ms": 0.054667,
+      "median_nfev": NaN,
+      "p95_ms": 0.06525210000000001,
+      "p95_nfev": NaN,
+      "p99_ms": 0.06888083,
+      "profile": "ideal",
+      "sequence": "fixed",
+      "success_count": 200,
+      "target_snr": 10.0,
+      "warmup_count": 20,
+      "worst_ms": 0.08375
+    },
+    {
+      "deadline_miss_count": 69,
+      "deadline_miss_rate": 0.345,
+      "estimator": "gaussian",
+      "failure_count": 0,
+      "failure_rate": 0.0,
+      "frame_count": 200,
+      "initialization": "cold",
+      "mean_ms": 1.089997905,
+      "median_ms": 0.9655835,
+      "median_nfev": 4.0,
+      "p95_ms": 1.7795919499999995,
+      "p95_nfev": 4.0,
+      "p99_ms": 3.829816759999997,
+      "profile": "ideal",
+      "sequence": "fixed",
+      "success_count": 200,
+      "target_snr": 10.0,
+      "warmup_count": 20,
+      "worst_ms": 5.426708
+    },
+    {
+      "deadline_miss_count": 15,
+      "deadline_miss_rate": 0.075,
+      "estimator": "gaussian",
+      "failure_count": 0,
+      "failure_rate": 0.0,
+      "frame_count": 200,
+      "initialization": "warm",
+      "mean_ms": 0.891221075,
+      "median_ms": 0.888271,
+      "median_nfev": 4.0,
+      "p95_ms": 1.0484715,
+      "p95_nfev": 4.0,
+      "p99_ms": 1.07579541,
+      "profile": "ideal",
+      "sequence": "fixed",
+      "success_count": 200,
+      "target_snr": 10.0,
+      "warmup_count": 20,
+      "worst_ms": 1.081334
+    }
+  ]
+}
